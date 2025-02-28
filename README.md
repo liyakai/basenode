@@ -1,0 +1,2 @@
+# basenode
+Game server basenode.
