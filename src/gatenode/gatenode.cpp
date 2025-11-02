@@ -29,6 +29,5 @@ extern "C" PLUGIN_EXPORT void DestroyPlugin(ToolBox::PluginInterface* plugin) {
 }
 
 extern "C" PLUGIN_EXPORT void Update() {
-    BaseNodeLogInfo("Update");
     PluginGateMgr->execute();
 }

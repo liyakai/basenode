@@ -2,6 +2,7 @@
 #include <string>
 #include <filesystem>
 #include "utils/basenode_def_internal.h"
+#include "tools/safe_call.h"
 #if defined(PLATFORM_WINDOWS)
     #include <windows.h>
 #else
@@ -20,10 +21,29 @@ int PluginLoadManager::Init()
 
 int PluginLoadManager::Update()
 {
+    // 自定义错误回调
+    auto error_callback = [](const std::string& context, const std::string& error_msg) {
+        BaseNodeLogError("XXX ---> SafeCall Error - Plugin: [%s], Error: %s", context.c_str(), error_msg.c_str());
+    };
+
     for (auto& [so_path, handle] : plugin_map_) {
-        void* func = dlsym(handle, "Update");
+        if (!handle) continue; // 跳过无效 handle
+        void* func = GetSymbolAddress_(handle, "Update");
         if (func) {
-            ((void (*)(void))func)();
+            auto update_func = reinterpret_cast<PluginUpdateFunc>(func);
+            
+            // 使用 ToolBox 子库中的 SafeCall 工具安全调用插件函数
+            // 捕获异常和信号（SIGSEGV/SIGFPE），使程序能够继续运行
+            bool success = ToolBox::SafeCallSimple(update_func, so_path, error_callback);
+            
+            if (!success) {
+                // 注意：由于 siglongjmp 回退栈帧的特性，SafeCall 内部的错误回调
+                // 可能不会输出。这里手动调用错误回调，确保能看到错误信息。
+                error_callback(so_path, "caught signal or exception");
+                
+                BaseNodeLogError("Plugin [%s] Update() failed, but continuing...", so_path.c_str());
+                fflush(stderr);
+            }
         }
     }
     return 0;

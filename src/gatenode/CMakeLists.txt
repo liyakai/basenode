@@ -27,4 +27,5 @@ add_custom_command(TARGET ${name} PRE_BUILD
 target_compile_options(${name} PRIVATE 
     -fvisibility=hidden             # 1. 隐藏所有符号
     -fvisibility-inlines-hidden     # 2. 隐藏内联函数符号
+    -fmacro-prefix-map=${PROJECT_SOURCE_DIR}/=  # 设置 __FILE__ 显示相对路径（相对于项目根目录）                           # 禁用优化，确保调试时代码不被优化掉
 )

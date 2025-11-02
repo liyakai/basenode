@@ -9,6 +9,9 @@
     using LibHandle = void*;
 #endif
 
+// 函数指针类型定义
+using PluginUpdateFunc = void (*)(void);
+
 namespace BaseNode
 {
 class PluginLoadManager

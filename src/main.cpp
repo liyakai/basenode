@@ -18,5 +18,6 @@ int processNode()
         PluginLoadMgr->Update();
         std::this_thread::sleep_for(std::chrono::milliseconds(1000));
     }
+    PluginLoadMgr->Uninit();
     return 0;
 }

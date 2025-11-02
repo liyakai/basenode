@@ -18,3 +18,7 @@ cd $scriptDir/build
 cmake ..
 
 make -j8
+
+
+# 拉子库
+# git submodule update --remote --recursive
