@@ -15,7 +15,7 @@ fi
 
 cd $scriptDir/build
 
-cmake ..
+cmake -S $scriptDir/cmake -B $scriptDir/build
 
 make -j8
 

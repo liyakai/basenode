@@ -15,7 +15,7 @@ namespace BaseNode
 int PluginLoadManager::Init()
 {
     std::filesystem::path cwd = std::filesystem::current_path();
-    LoadPluginSo_(cwd.string() + "/lib/libgatesvr.so");
+    LoadPluginSo_(cwd.string() + "/lib/libgatenode.so");
     return 0;
 }
 
@@ -28,7 +28,7 @@ int PluginLoadManager::Update()
 
     for (auto& [so_path, handle] : plugin_map_) {
         if (!handle) continue; // 跳过无效 handle
-        void* func = GetSymbolAddress_(handle, "Update");
+        void* func = GetSymbolAddress_(handle, "updateSo");
         if (func) {
             auto update_func = reinterpret_cast<PluginUpdateFunc>(func);
             

@@ -9,9 +9,9 @@ namespace BaseNode
 class PluginGate : public ToolBox::PluginInterface
 {
 public:
-    void execute()
+    void pluginUpdate()
     {
-        BaseNodeLogInfo("PluginGate execute");
+        BaseNodeLogInfo("PluginGate pluginUpdate");
     };
 };
 
@@ -20,14 +20,14 @@ public:
 #define PluginGateMgr ToolBox::Singleton<BaseNode::PluginGate>::Instance()
 
 // 4. 定义C接口导出符号
-extern "C" PLUGIN_EXPORT ToolBox::PluginInterface* CreatePlugin() {
-    return new BaseNode::PluginGate();
-}
+// extern "C" PLUGIN_EXPORT ToolBox::PluginInterface* CreatePlugin() {
+//     return new BaseNode::PluginGate();
+// }
 
-extern "C" PLUGIN_EXPORT void DestroyPlugin(ToolBox::PluginInterface* plugin) {
-    delete plugin;
-}
+// extern "C" PLUGIN_EXPORT void DestroyPlugin(ToolBox::PluginInterface* plugin) {
+//     delete plugin;
+// }
 
-extern "C" PLUGIN_EXPORT void Update() {
-    PluginGateMgr->execute();
+extern "C" PLUGIN_EXPORT void updateSo() {
+    PluginGateMgr->pluginUpdate();
 }
