@@ -1,7 +1,7 @@
 #include "tools/plugin_system.h"
 #include "utils/basenode_def_internal.h"
 // 1. 声明导出符号
-#define PLUGIN_EXPORT __attribute__((visibility("default")))
+
 
 namespace BaseNode
 {
@@ -28,6 +28,6 @@ public:
 //     delete plugin;
 // }
 
-extern "C" PLUGIN_EXPORT void updateSo() {
+extern "C" SO_EXPORT_SYMBOL void SO_EXPORT_FUNC_UPDATE() {
     PluginGateMgr->pluginUpdate();
 }

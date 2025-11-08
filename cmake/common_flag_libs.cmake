@@ -13,6 +13,15 @@ set(SRC_PATH ${ROOT_PATH}/src)
 set(SRC_CORE_PATH ${SRC_PATH}/core)
 
 
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_C_COMPILER clang)
+set(CMAKE_CXX_COMPILER clang++)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
+# 如果没有指定构建类型，默认为 Debug（便于调试）
+if(NOT CMAKE_BUILD_TYPE)
+    set(CMAKE_BUILD_TYPE Debug CACHE STRING "Build type" FORCE)
+endif()
 
 
 
@@ -83,6 +92,14 @@ function(ADD_SHARED_LIBRARY_FROM_DIR name source_dir)
         -fvisibility-inlines-hidden     # 隐藏内联函数符号
         -fmacro-prefix-map=${ROOT_PATH}/=  # 设置 __FILE__ 显示相对路径
     )
+    
+    # 如果是 Debug 构建类型，添加调试选项
+    if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+        target_compile_options(${name} PRIVATE 
+            -g3                              # 生成详细的调试信息（包括宏定义）
+            -O0                              # 禁用优化，确保调试时代码不被优化掉
+        )
+    endif()
 endfunction()
 
 
@@ -156,6 +173,14 @@ function(ADD_EXECUTABLE_FROM_DIRS name)
     target_compile_options(${name} PRIVATE 
         -fmacro-prefix-map=${ROOT_PATH}/=  # 设置 __FILE__ 显示相对路径
     )
+    
+    # 如果是 Debug 构建类型，添加调试选项
+    if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+        target_compile_options(${name} PRIVATE 
+            -g3                              # 生成详细的调试信息（包括宏定义）
+            -O0                              # 禁用优化，确保调试时代码不被优化掉
+        )
+    endif()
     
     # 链接库
     if(libs)

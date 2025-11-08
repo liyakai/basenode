@@ -5,6 +5,11 @@
 namespace BaseNode
 {
 
+#define SO_EXPORT_SYMBOL __attribute__((visibility("default")))
+#define SO_EXPORT_FUNC_INIT initSo
+#define SO_EXPORT_FUNC_UPDATE updateSo
+#define SO_EXPORT_FUNC_UNINIT uninitSo
+
 // 定义 网络库日志接口
 #ifndef BaseNodeLogTrace
 #define BaseNodeLogTrace(LogFormat, ...)     LogTrace(LogFormat, ## __VA_ARGS__)

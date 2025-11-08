@@ -26,8 +26,9 @@ private:
 
     LibHandle LoadDynamicLibrary_(const std::string& so_path);
     void* GetSymbolAddress_(LibHandle handle, const std::string& symbol_name);
-    void CloseDynamicLibrary_(LibHandle handle);
+    void CloseDynamicLibrary_(LibHandle handle, const std::string& so_path);
     std::string GetLastLibraryError_();
+    void SafeCallSimple_(void* handle, const std::string& so_path, const std::string& symbol_name);
 
 private:
     std::map<std::string, void*> plugin_map_;
