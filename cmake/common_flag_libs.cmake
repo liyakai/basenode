@@ -184,7 +184,7 @@ function(ADD_EXECUTABLE_FROM_DIRS name)
     
     # 链接库
     if(libs)
-        target_link_libraries(${name} ${libs})
+        target_link_libraries(${name} PRIVATE ${libs})
     endif()
 endfunction()
 

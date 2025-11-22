@@ -18,6 +18,7 @@ int PluginLoadManager::Init()
     LoadPluginSo_(cwd.string() + "/lib/libgatenode.so");
     LoadPluginSo_(cwd.string() + "/lib/libplayer_module.so");
     LoadPluginSo_(cwd.string() + "/lib/libguild_module.so");
+    LoadPluginSo_(cwd.string() + "/lib/libnetwork.so");
     return 0;
 }
 
@@ -47,7 +48,7 @@ int PluginLoadManager::LoadPluginSo_(const std::string& so_path)
         return -1;
     }
     plugin_map_[so_path] = handle;
-    SafeCallSimple_(handle, so_path, "InitSo");
+    SafeCallSimple_(handle, so_path, "initSo");
     return 0;
 }
 
@@ -56,6 +57,8 @@ LibHandle PluginLoadManager::LoadDynamicLibrary_(const std::string& so_path)
 #if defined(PLATFORM_WINDOWS)
     return LoadLibraryA(path.c_str());
 #else
+    // 使用 RTLD_NOW 确保所有符号在加载时立即解析
+    // 这对于 std::thread 等需要早期初始化的 C++ 运行时组件很重要
     return dlopen(so_path.c_str(), RTLD_LAZY);
 #endif
 }
@@ -71,7 +74,7 @@ void* PluginLoadManager::GetSymbolAddress_(LibHandle handle, const std::string& 
 
 void PluginLoadManager::CloseDynamicLibrary_(LibHandle handle, const std::string& so_path)
 {
-    SafeCallSimple_(handle, so_path, "UnInitSo");
+    SafeCallSimple_(handle, so_path, "uninitSo");
 #if defined(PLATFORM_WINDOWS)
     FreeLibrary(handle);
 #else
