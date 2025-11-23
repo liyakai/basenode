@@ -3,7 +3,7 @@
 
 namespace BaseNode
 {
-void Player::Init()
+void Player::DoInit()
 {
     BaseNodeLogInfo("PlayerModule Init");
 }

@@ -4,7 +4,7 @@
 namespace BaseNode
 {
 
-void Guild::Init()
+void Guild::DoInit()
 {
     BaseNodeLogInfo("GuildModule Init");
 }

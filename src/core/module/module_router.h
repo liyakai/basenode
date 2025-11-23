@@ -1,0 +1,86 @@
+#pragma once
+
+#include "tools/singleton.h"
+
+#include <unordered_map>
+#include <vector>
+#include <string_view>
+
+namespace BaseNode
+{
+class IModule;
+}
+
+namespace BaseNode
+{
+/**
+ * @brief 模块路由管理器
+ * 负责维护服务ID到模块的映射，并提供路由功能
+ */
+class ModuleRouter
+{
+public:
+    /**
+     * @brief 注册模块及其服务ID
+     * @param module 模块指针
+     * @return 是否注册成功
+     */
+    bool RegisterModule(IModule* module);
+
+    /**
+     * @brief 注销模块
+     * @param module 模块指针
+     */
+    void UnregisterModule(IModule* module);
+
+    /**
+     * @brief 路由网络协议包到对应的模块
+     * @param protocol_data 协议数据包
+     * @return 是否成功路由
+     */
+     bool RouteProtocolPacket(std::string_view protocol_data);
+
+private:
+
+    /**
+     * @brief 根据服务ID查找对应的模块
+     * @param service_id 服务ID
+     * @return 模块指针，如果未找到返回nullptr
+     */
+    IModule* FindModuleByServiceId(uint32_t service_id) const;
+
+    /**
+     * @brief 根据模块ID查找模块
+     * @param module_id 模块ID
+     * @return 模块指针，如果未找到返回nullptr
+     */
+    IModule* FindModuleById(uint32_t module_id) const;
+
+    /**
+     * @brief 路由RPC请求到对应的模块
+     * @param rpc_data RPC数据包
+     * @return 是否成功路由
+     */
+    bool RouteRpcRequest(std::string_view rpc_data);
+
+
+
+    /**
+     * @brief 从RPC数据包中提取服务ID
+     * @param rpc_data RPC数据包
+     * @return 服务ID，如果提取失败返回0
+     */
+    static uint32_t ExtractServiceIdFromRpc(std::string_view rpc_data);
+
+private:
+    // 服务ID到模块的映射表
+    std::unordered_map<uint32_t, IModule*> service_id_to_module_;
+    
+    // 模块ID到模块的映射表（用于快速查找）
+    std::unordered_map<uint32_t, IModule*> module_id_to_module_;
+};
+
+#define ModuleRouterMgr ToolBox::Singleton<BaseNode::ModuleRouter>::Instance()
+
+} // namespace BaseNode
+

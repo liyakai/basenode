@@ -13,13 +13,13 @@ public:
     Network();
     virtual ~Network();
     
-    virtual void Init() override;
     virtual void UnInit() override;
 
     // 提供访问底层网络库的接口（可选，用于高级功能）
     ToolBox::Network* GetNetwork() { return network_impl_; }
 
 protected:
+    virtual void DoInit() override;
     virtual void DoUpdate() override;
 
 private:

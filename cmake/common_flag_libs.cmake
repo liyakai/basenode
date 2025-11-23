@@ -62,7 +62,8 @@ function(ADD_SHARED_LIBRARY_FROM_DIR name source_dir)
 
     # 收集源文件
     AUX_SOURCE_DIRECTORY(${source_dir} ${name}_SRCS)
-
+    AUX_SOURCE_DIRECTORY(${SRC_CORE_PATH}/module ${name}_SRCS)
+    Message(STATUS "${name}_SRCS -> ${${name}_SRCS}")
     # 创建共享库
     ADD_LIBRARY(${name} SHARED ${${name}_SRCS})
 

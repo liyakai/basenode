@@ -3,10 +3,16 @@
 #include "utils/basenode_def_internal.h"
 #include "tools/ringbuffer.h"
 #include "coro_rpc/coro_rpc_server.h"
+#include "module_router.h"
 #include <cstdint>
 #include <string>
 #include <string_view>
 #include <typeinfo>
+
+// 前向声明
+namespace BaseNode {
+    class ModuleRouter;
+}
 
 namespace BaseNode
 {
@@ -17,7 +23,16 @@ class IModule
 {
 public:
     virtual ~IModule() = default;
-    virtual void Init() = 0;
+    
+    // 非虚函数，确保基类逻辑总是被执行
+    // 子类不应该重写此方法，而是重写 DoInit()
+    void Init() {
+        // 先注册模块到路由管理器
+        if (!RegisterToRouter()) {
+            BaseNodeLogError("[module] Failed to register module (id: %u) to router", GetModuleId());
+        }
+        DoInit();  // 然后调用子类的初始化逻辑
+    }
     
     // 非虚函数，确保基类逻辑总是被执行
     // 子类不应该重写此方法，而是重写 DoUpdate()
@@ -55,7 +70,19 @@ public:
         return rpc_server_.GetAllServiceHandlerKeys();
     }
     
+    /**
+     * @brief 获取模块ID
+     * @return 模块ID（基于类名的MD5哈希）
+     */
+    uint32_t GetModuleId() const
+    {
+        return MD5Hash32Constexpr(this->GetFinalClassName_());
+    }
+
 protected:
+    // 子类重写此方法来实现自己的初始化逻辑
+    virtual void DoInit() = 0;
+    
     // 子类重写此方法来实现自己的更新逻辑
     virtual void DoUpdate() = 0;
     
@@ -83,12 +110,19 @@ private:
         const char* name = typeid(*this).name();
         return name;
     }
-    uint32_t GetModuleId_() const
-    {
-        return MD5Hash32Constexpr(GetFinalClassName_());
-    }
 private:
     ToolBox::RingBufferSPSC<ModuleEvent, DEFAULT_MODULE_RING_BUFF_SIZE> recv_ring_buffer_; // 接收缓冲区
     ToolBox::CoroRpc::CoroRpcServer<ToolBox::CoroRpc::CoroRpcProtocol> rpc_server_; // RPC 服务器
+    
+    /**
+     * @brief 注册模块到路由管理器
+     * 在基类Init()中自动调用，子类无需关心
+     * @return 是否注册成功
+     */
+    bool RegisterToRouter()
+    {
+        return ModuleRouterMgr->RegisterModule(this);
+    }
 };
+
 } // namespace BaseNode

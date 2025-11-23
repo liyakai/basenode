@@ -1,4 +1,5 @@
 #include "network.h"
+#include "module/module_router.h"
 #include "utils/basenode_def_internal.h"
 #include <pthread.h>
 
@@ -18,7 +19,7 @@ Network::~Network()
     }
 }
 
-void Network::Init()
+void Network::DoInit()
 {
     BaseNodeLogInfo("Network Init");
     
@@ -32,6 +33,15 @@ void Network::Init()
         BaseNodeLogError("Network Start failed");
         return;
     }
+    
+    // 设置网络接收回调，使用ModuleRouter路由RPC数据包
+    network_impl_->SetOnReceived([this](ToolBox::NetworkType type, uint64_t opaque, uint64_t conn_id, const char* data, size_t size) {
+        // 将接收到的数据路由到对应的模块
+        std::string_view data_view(data, size);
+        if (!ModuleRouterMgr->RouteProtocolPacket(data_view)) {
+            BaseNodeLogWarn("[Network] Failed to route protocol packet, size: %zu", size);
+        }
+    });
     
     BaseNodeLogInfo("Network Init success");
 }

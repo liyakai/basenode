@@ -47,7 +47,7 @@ target_link_options(network PRIVATE
 
 
 # 生成底座
-ADD_EXECUTABLE_FROM_DIRS(basenode ${SRC_PATH}/boot ${SRC_PATH}/core/plugin_system LIBS dl pthread)
+ADD_EXECUTABLE_FROM_DIRS(basenode ${SRC_PATH}/boot ${SRC_PATH}/core/plugin_system ${SRC_PATH}/core/module LIBS dl pthread)
 
 
 message(STATUS "SRC_PATH -> ${SRC_PATH}")

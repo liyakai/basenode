@@ -8,10 +8,10 @@ namespace BaseNode
 class Player : public IModule
 {
 public:
-    virtual void Init() override;
     virtual void UnInit() override;
     
 protected:
+    virtual void DoInit() override;
     virtual void DoUpdate() override;
 };
 
