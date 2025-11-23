@@ -3,8 +3,10 @@
 #include "utils/basenode_def_internal.h"
 #include "tools/ringbuffer.h"
 #include "coro_rpc/coro_rpc_server.h"
+#include <cstdint>
 #include <string>
 #include <string_view>
+#include <typeinfo>
 
 namespace BaseNode
 {
@@ -47,6 +49,11 @@ public:
         }
         return ErrorCode::BN_SUCCESS;
     }
+
+    std::vector<uint32_t> GetAllServiceHandlerKeys()
+    {
+        return rpc_server_.GetAllServiceHandlerKeys();
+    }
     
 protected:
     // 子类重写此方法来实现自己的更新逻辑
@@ -69,6 +76,16 @@ private:
             }
             return;
         }
+    }
+    // 获取最终子类的类名
+    std::string GetFinalClassName_() const
+    {
+        const char* name = typeid(*this).name();
+        return name;
+    }
+    uint32_t GetModuleId_() const
+    {
+        return MD5Hash32Constexpr(GetFinalClassName_());
     }
 private:
     ToolBox::RingBufferSPSC<ModuleEvent, DEFAULT_MODULE_RING_BUFF_SIZE> recv_ring_buffer_; // 接收缓冲区
