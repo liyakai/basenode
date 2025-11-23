@@ -2,6 +2,8 @@
 #include "utils/basenode_def_internal.h"
 #include <pthread.h>
 
+namespace BaseNode
+{
 Network::Network()
     : network_impl_(nullptr)
 {
@@ -34,7 +36,7 @@ void Network::Init()
     BaseNodeLogInfo("Network Init success");
 }
 
-void Network::Update()
+void Network::DoUpdate()
 {
     // 驱动网络库主线程事件处理
     if (network_impl_)
@@ -70,3 +72,5 @@ extern "C" SO_EXPORT_SYMBOL void SO_EXPORT_FUNC_UPDATE() {
 extern "C" SO_EXPORT_SYMBOL void SO_EXPORT_FUNC_UNINIT() {
     NetworkMgr->UnInit();
 }
+
+} // namespace BaseNode

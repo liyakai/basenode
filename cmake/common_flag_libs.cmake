@@ -72,6 +72,7 @@ function(ADD_SHARED_LIBRARY_FROM_DIR name source_dir)
         ${source_dir}/..
         ${ROOT_PATH}/3rdparty/toolbox/include
         ${SRC_CORE_PATH}
+        ${SRC_CORE_PATH}/module
     )
 
     # 设置所有构建类型的输出路径

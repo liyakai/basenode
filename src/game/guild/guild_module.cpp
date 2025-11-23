@@ -1,12 +1,15 @@
 #include "guild_module.h"
 #include "utils/basenode_def_internal.h"
 
+namespace BaseNode
+{
+
 void Guild::Init()
 {
     BaseNodeLogInfo("GuildModule Init");
 }
 
-void Guild::Update()
+void Guild::DoUpdate()
 {
     BaseNodeLogInfo("GuildModule Update");
 }
@@ -27,3 +30,5 @@ extern "C" SO_EXPORT_SYMBOL void SO_EXPORT_FUNC_UPDATE() {
 extern "C" SO_EXPORT_SYMBOL void SO_EXPORT_FUNC_UNINIT() {
     GuildMgr->UnInit();
 }
+
+} // namespace BaseNode

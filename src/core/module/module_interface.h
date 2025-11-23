@@ -1,0 +1,77 @@
+#pragma once
+#include "module_event.h"
+#include "utils/basenode_def_internal.h"
+#include "tools/ringbuffer.h"
+#include "coro_rpc/coro_rpc_server.h"
+#include <string>
+#include <string_view>
+
+namespace BaseNode
+{
+
+#define DEFAULT_MODULE_RING_BUFF_SIZE 256 * 1024
+
+class IModule
+{
+public:
+    virtual ~IModule() = default;
+    virtual void Init() = 0;
+    
+    // 非虚函数，确保基类逻辑总是被执行
+    // 子类不应该重写此方法，而是重写 DoUpdate()
+    void Update() {
+        ProcessRingBufferData_();  // 先处理环形缓冲区数据
+        DoUpdate();                  // 然后调用子类的更新逻辑
+    }
+    
+    virtual void UnInit() = 0;
+
+    ErrorCode PushModuleEvent(ModuleEvent&& module_event)
+    {
+        if (recv_ring_buffer_.Full()) {
+            ProcessRingBufferData_();
+            if (recv_ring_buffer_.Full()) {
+                return ErrorCode::BN_RECV_BUFF_OVERFLOW;
+            }
+        }
+        recv_ring_buffer_.Push(std::move(module_event));
+        return ErrorCode::BN_SUCCESS;
+    }
+
+    ErrorCode SetSendCallback(std::function<void(uint64_t, std::string_view &&)>&& callback)
+    {
+        ToolBox::CoroRpc::Errc errc = rpc_server_.SetSendCallback(std::move(callback));
+        if (errc != ToolBox::CoroRpc::Errc::SUCCESS) {
+            BaseNodeLogError("[module] SetSendCallback failed, errc: %d", errc);
+            return ErrorCode::BN_SET_SEND_CALLBACK_FAILED;
+        }
+        return ErrorCode::BN_SUCCESS;
+    }
+    
+protected:
+    // 子类重写此方法来实现自己的更新逻辑
+    virtual void DoUpdate() = 0;
+    
+private:
+    void ProcessRingBufferData_()
+    {
+        while (!recv_ring_buffer_.Empty())
+        {
+            // char* data = recv_ring_buffer_.GetReadPtr();
+            const ModuleEvent& event = recv_ring_buffer_.Pop();
+            switch (event.type_)
+            {
+            case ModuleEvent::EventType::ET_RPC_REQUEST:
+                rpc_server_.OnRecvReq(0, event.data_.rpc_request_.rpc_req_data_);
+                break;
+            default:
+                break;
+            }
+            return;
+        }
+    }
+private:
+    ToolBox::RingBufferSPSC<ModuleEvent, DEFAULT_MODULE_RING_BUFF_SIZE> recv_ring_buffer_; // 接收缓冲区
+    ToolBox::CoroRpc::CoroRpcServer<ToolBox::CoroRpc::CoroRpcProtocol> rpc_server_; // RPC 服务器
+};
+} // namespace BaseNode

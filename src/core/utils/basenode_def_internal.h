@@ -30,4 +30,13 @@ namespace BaseNode
 #define BaseNodeLogFatal(LogFormat, ...)     LogFatal(LogFormat, ## __VA_ARGS__)
 #endif  // BaseNodeLogFatal
 
-}
+enum class ErrorCode : int32_t
+{
+    BN_SUCCESS = 0,
+    BN_INVALID_ARGUMENTS = 1,
+    BN_SEND_BUFF_OVERFLOW = 2,   // 发送缓冲区满
+    BN_RECV_BUFF_OVERFLOW = 3,   // 接收缓冲区满
+    BN_SET_SEND_CALLBACK_FAILED = 4,   // 设置发送回调失败
+};
+
+} // namespace BaseNode
