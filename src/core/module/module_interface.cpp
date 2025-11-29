@@ -4,17 +4,35 @@
 
 namespace BaseNode
 {
-    void IModule::Init() {
+    ErrorCode IModule::Init() {
         // 先注册模块到路由管理器
-        if (!RegisterToRouter_()) {
-            BaseNodeLogError("[module] Failed to register module (id: %u) to router", GetModuleId());
+        ErrorCode err = RegisterToRouter_();
+        if (err != ErrorCode::BN_SUCCESS) {
+            BaseNodeLogError("[module] Failed to register module (id: %u) to router, error: %d", GetModuleId(), err);
+            return err;
         }
         DoInit();  // 然后调用子类的初始化逻辑
+        return ErrorCode::BN_SUCCESS;
     }
 
-    void IModule::Update() {
+    ErrorCode IModule::Update() {
         ProcessRingBufferData_();  // 先处理环形缓冲区数据
         DoUpdate();                  // 然后调用子类的更新逻辑
+        return ErrorCode::BN_SUCCESS;
+    }
+
+    ErrorCode IModule::UnInit() {
+        ErrorCode err = DoUninit();
+        if (err != ErrorCode::BN_SUCCESS) {
+            BaseNodeLogError("[module] UnInit failed, error: %d", err);
+            return err;
+        }
+        err = ModuleRouterMgr->UnregisterModule(this);
+        if (err != ErrorCode::BN_SUCCESS) {
+            BaseNodeLogError("[module] UnregisterModule failed");
+            return err;
+        }
+        return ErrorCode::BN_SUCCESS;
     }
 
     ErrorCode IModule::PushModuleEvent(ModuleEvent&& module_event)
@@ -82,7 +100,7 @@ namespace BaseNode
         return name;
     }
 
-    bool IModule::RegisterToRouter_()
+    ErrorCode IModule::RegisterToRouter_()
     {
         return ModuleRouterMgr->RegisterModule(this);
     }

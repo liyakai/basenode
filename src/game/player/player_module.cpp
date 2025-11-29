@@ -3,19 +3,29 @@
 
 namespace BaseNode
 {
-void Player::DoInit()
+ErrorCode Player::DoInit()
 {
     BaseNodeLogInfo("PlayerModule Init");
+    return ErrorCode::BN_SUCCESS;
 }
 
-void Player::DoUpdate()
+ErrorCode Player::DoUpdate()
 {
     BaseNodeLogInfo("PlayerModule Update");
+    return ErrorCode::BN_SUCCESS;
 }
 
-void Player::UnInit()
+ErrorCode Player::DoUninit()
 {
     BaseNodeLogInfo("PlayerModule UnInit");
+    return ErrorCode::BN_SUCCESS;
+}
+
+ErrorCode Player::OnLogin(uint64_t player_id)
+{
+    BaseNodeLogInfo("PlayerModule OnLogin, player_id: %llu", player_id);
+    
+    return ErrorCode::BN_SUCCESS;
 }
 
 extern "C" SO_EXPORT_SYMBOL void SO_EXPORT_FUNC_INIT() {

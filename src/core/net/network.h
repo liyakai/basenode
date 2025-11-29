@@ -12,15 +12,14 @@ class Network : public IModule
 public:
     Network();
     virtual ~Network();
-    
-    virtual void UnInit() override;
 
     // 提供访问底层网络库的接口（可选，用于高级功能）
     ToolBox::Network* GetNetwork() { return network_impl_; }
 
 protected:
-    virtual void DoInit() override;
-    virtual void DoUpdate() override;
+    virtual ErrorCode DoInit() override;
+    virtual ErrorCode DoUpdate() override;
+    virtual ErrorCode DoUninit() override;
 
 private:
     ToolBox::Network* network_impl_;  // 第三方网络库实例

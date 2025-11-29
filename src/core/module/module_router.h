@@ -26,13 +26,13 @@ public:
      * @param module 模块指针
      * @return 是否注册成功
      */
-    bool RegisterModule(IModule* module,  bool is_network_module = false);
+     ErrorCode RegisterModule(IModule* module,  bool is_network_module = false);
 
     /**
      * @brief 注销模块
      * @param module 模块指针
      */
-    void UnregisterModule(IModule* module);
+    ErrorCode UnregisterModule(IModule* module);
 
     /**
      * @brief 路由网络协议包到对应的模块

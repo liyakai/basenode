@@ -4,19 +4,22 @@
 namespace BaseNode
 {
 
-void Guild::DoInit()
+ErrorCode Guild::DoInit()
 {
     BaseNodeLogInfo("GuildModule Init");
+    return ErrorCode::BN_SUCCESS;
 }
 
-void Guild::DoUpdate()
+ErrorCode Guild::DoUpdate()
 {
     BaseNodeLogInfo("GuildModule Update");
+    return ErrorCode::BN_SUCCESS;
 }
 
-void Guild::UnInit()
+ErrorCode Guild::DoUninit()
 {
     BaseNodeLogInfo("GuildModule UnInit");
+    return ErrorCode::BN_SUCCESS;
 }
 
 extern "C" SO_EXPORT_SYMBOL void SO_EXPORT_FUNC_INIT() {
@@ -28,7 +31,7 @@ extern "C" SO_EXPORT_SYMBOL void SO_EXPORT_FUNC_UPDATE() {
 }
 
 extern "C" SO_EXPORT_SYMBOL void SO_EXPORT_FUNC_UNINIT() {
-    GuildMgr->UnInit();
+    GuildMgr->UnInit();  // 调用基类的UnInit方法
 }
 
 } // namespace BaseNode

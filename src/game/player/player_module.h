@@ -2,17 +2,20 @@
 
 #include "module_interface.h"
 #include "utils/basenode_def_internal.h"
+#include <cstdint>
 
 namespace BaseNode
 {
 class Player : public IModule
 {
 public:
-    virtual void UnInit() override;
+
+    ErrorCode OnLogin(uint64_t player_id);
     
 protected:
-    virtual void DoInit() override;
-    virtual void DoUpdate() override;
+    virtual ErrorCode DoInit() override;
+    virtual ErrorCode DoUpdate() override;
+    virtual ErrorCode DoUninit() override;
 };
 
 #define PlayerMgr ToolBox::Singleton<Player>::Instance()

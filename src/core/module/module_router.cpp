@@ -9,11 +9,11 @@
 namespace BaseNode
 {
 
-bool ModuleRouter::RegisterModule(IModule* module,  bool is_network_module /*  = false */)
+ErrorCode ModuleRouter::RegisterModule(IModule* module,  bool is_network_module /*  = false */)
 {
     if (!module) {
         BaseNodeLogError("[ModuleRouter] RegisterModule: module is nullptr");
-        return false;
+        return ErrorCode::BN_INVALID_ARGUMENTS;
     }
 
     // 获取模块ID
@@ -27,7 +27,7 @@ bool ModuleRouter::RegisterModule(IModule* module,  bool is_network_module /*  =
         // 检查模块是否已经注册
         if (module_id_to_module_.find(module_id) != module_id_to_module_.end()) {
             BaseNodeLogWarn("[ModuleRouter] RegisterModule: module (id: %u) already registered", module_id);
-            return false;
+            return ErrorCode::BN_MODULE_ALREADY_REGISTERED;
         }
 
         // 获取模块的所有服务ID
@@ -48,7 +48,7 @@ bool ModuleRouter::RegisterModule(IModule* module,  bool is_network_module /*  =
                         service_id_to_module_.erase(it);
                     }
                 }
-                return false;
+                return ErrorCode::BN_SERVICE_ID_ALREADY_REGISTERED;
             }
             service_id_to_module_[service_id] = module;
             BaseNodeLogDebug("[ModuleRouter] RegisterModule: service_id %u -> module_id %u", service_id, module_id);
@@ -69,17 +69,13 @@ bool ModuleRouter::RegisterModule(IModule* module,  bool is_network_module /*  =
             module_id, service_ids.size());
     }
 
-    
-    
-
-    
-    return true;
+    return ErrorCode::BN_SUCCESS;
 }
 
-void ModuleRouter::UnregisterModule(IModule* module)
+ErrorCode ModuleRouter::UnregisterModule(IModule* module)
 {
     if (!module) {
-        return;
+        return ErrorCode::BN_INVALID_ARGUMENTS;
     }
 
     uint32_t module_id = module->GetModuleId();
@@ -98,6 +94,8 @@ void ModuleRouter::UnregisterModule(IModule* module)
     module_id_to_module_.erase(module_id);
     
     BaseNodeLogInfo("[ModuleRouter] UnregisterModule: module (id: %u) unregistered", module_id);
+
+    return ErrorCode::BN_SUCCESS;
 }
 
 IModule* ModuleRouter::FindModuleByServiceId(uint32_t service_id) const

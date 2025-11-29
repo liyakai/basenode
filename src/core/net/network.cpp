@@ -19,7 +19,7 @@ Network::~Network()
     }
 }
 
-void Network::DoInit()
+ErrorCode Network::DoInit()
 {
     BaseNodeLogInfo("Network Init");
     
@@ -31,12 +31,13 @@ void Network::DoInit()
     if (!network_impl_->Start(1))
     {
         BaseNodeLogError("Network Start failed");
-        return;
+        return ErrorCode::BN_NETWORK_START_FAILED;
     }
 
-    if (!ModuleRouterMgr->RegisterModule(this, true)) {
-        BaseNodeLogError("[Network] Failed to register network module to router");
-        return;
+    ErrorCode err = ModuleRouterMgr->RegisterModule(this, true);
+    if (err != ErrorCode::BN_SUCCESS) {
+        BaseNodeLogError("[Network] Failed to register network module to router, error: %d", err);
+        return err;
     }
     
     // 设置网络接收回调，使用ModuleRouter路由RPC数据包
@@ -58,20 +59,22 @@ void Network::DoInit()
     });
     
     BaseNodeLogInfo("Network Init success");
+    return ErrorCode::BN_SUCCESS;
 }
 
-void Network::DoUpdate()
+ErrorCode Network::DoUpdate()
 {
     // 驱动网络库主线程事件处理
     if (network_impl_)
     {
         network_impl_->Update();
     }
+    return ErrorCode::BN_SUCCESS;
 }
 
-void Network::UnInit()
+ErrorCode Network::DoUninit()
 {
-    BaseNodeLogInfo("Network UnInit");
+    BaseNodeLogInfo("Network DoUninit");
     
     if (network_impl_)
     {
@@ -83,6 +86,7 @@ void Network::UnInit()
     }
     
     BaseNodeLogInfo("Network UnInit success");
+    return ErrorCode::BN_SUCCESS;
 }
 
 extern "C" SO_EXPORT_SYMBOL void SO_EXPORT_FUNC_INIT() {
