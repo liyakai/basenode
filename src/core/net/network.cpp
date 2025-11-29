@@ -33,14 +33,28 @@ void Network::DoInit()
         BaseNodeLogError("Network Start failed");
         return;
     }
+
+    if (!ModuleRouterMgr->RegisterModule(this, true)) {
+        BaseNodeLogError("[Network] Failed to register network module to router");
+        return;
+    }
     
     // 设置网络接收回调，使用ModuleRouter路由RPC数据包
     network_impl_->SetOnReceived([this](ToolBox::NetworkType type, uint64_t opaque, uint64_t conn_id, const char* data, size_t size) {
         // 将接收到的数据路由到对应的模块
         std::string_view data_view(data, size);
-        if (!ModuleRouterMgr->RouteProtocolPacket(data_view)) {
-            BaseNodeLogWarn("[Network] Failed to route protocol packet, size: %zu", size);
+        ErrorCode err = ModuleRouterMgr->RouteProtocolPacket(data_view);
+        if (err != ErrorCode::BN_SUCCESS) {
+            BaseNodeLogWarn("[Network] Failed to route protocol packet, error: %d, size: %zu", static_cast<int>(err), size);
         }
+    });
+
+    SetClientSendCallback([this](std::string_view &&){
+
+    });
+
+    SetServerSendCallback([this](uint64_t, std::string_view &&){
+
     });
     
     BaseNodeLogInfo("Network Init success");

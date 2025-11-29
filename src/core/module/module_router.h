@@ -1,7 +1,8 @@
 #pragma once
 
 #include "tools/singleton.h"
-
+#include "utils/basenode_def_internal.h"
+#include "module_event.h"
 #include <unordered_map>
 #include <vector>
 #include <string_view>
@@ -25,7 +26,7 @@ public:
      * @param module 模块指针
      * @return 是否注册成功
      */
-    bool RegisterModule(IModule* module);
+    bool RegisterModule(IModule* module,  bool is_network_module = false);
 
     /**
      * @brief 注销模块
@@ -38,7 +39,7 @@ public:
      * @param protocol_data 协议数据包
      * @return 是否成功路由
      */
-     bool RouteProtocolPacket(std::string_view protocol_data);
+    ErrorCode RouteProtocolPacket(std::string_view protocol_data);
 
 private:
 
@@ -59,18 +60,28 @@ private:
     /**
      * @brief 路由RPC请求到对应的模块
      * @param rpc_data RPC数据包
-     * @return 是否成功路由
+     * @return 错误码
      */
-    bool RouteRpcRequest(std::string_view rpc_data);
+    ErrorCode RouteRpcRequest(std::string_view rpc_data);
+    /**
+     * @brief 路由RPC回包到对应的模块
+     * @param rpc_data RPC数据包
+     * @return 错误码
+     */
+    ErrorCode RouteRpcResponse(std::string_view rpc_data);
 
 
-
+private:
     /**
      * @brief 从RPC数据包中提取服务ID
      * @param rpc_data RPC数据包
      * @return 服务ID，如果提取失败返回0
      */
-    static uint32_t ExtractServiceIdFromRpc(std::string_view rpc_data);
+     uint32_t ExtractServiceIdFromRpc_(std::string_view rpc_data);
+
+     ErrorCode RouteRpcData_(std::string_view rpc_data, ModuleEvent::EventType event_type);
+
+
 
 private:
     // 服务ID到模块的映射表
@@ -78,6 +89,8 @@ private:
     
     // 模块ID到模块的映射表（用于快速查找）
     std::unordered_map<uint32_t, IModule*> module_id_to_module_;
+
+    IModule* network_module_;
 };
 
 #define ModuleRouterMgr ToolBox::Singleton<BaseNode::ModuleRouter>::Instance()

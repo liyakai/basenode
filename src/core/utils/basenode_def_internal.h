@@ -37,6 +37,7 @@ enum class ErrorCode : int32_t
     BN_SEND_BUFF_OVERFLOW = 2,   // 发送缓冲区满
     BN_RECV_BUFF_OVERFLOW = 3,   // 接收缓冲区满
     BN_SET_SEND_CALLBACK_FAILED = 4,   // 设置发送回调失败
+    BN_SERVICE_ID_NOT_FOUND = 5,   // 服务ID未找到
 };
 
 } // namespace BaseNode

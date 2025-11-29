@@ -15,6 +15,7 @@ struct ModuleEvent
     {
         ET_NONE,
         ET_RPC_REQUEST,
+        ET_RPC_RESPONSE,
     };
     EventType type_;
     union EventData
@@ -23,6 +24,11 @@ struct ModuleEvent
         {
             std::string_view rpc_req_data_;
         } rpc_request_;
+
+        struct RpcResponse
+        {
+            std::string_view rpc_rsp_data_;
+        } rpc_rsponse_;
         
         // 默认构造函数（C++17 允许 union 包含非 POD 类型）
         EventData() : rpc_request_{} {}
