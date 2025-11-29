@@ -2,6 +2,7 @@
 #include "module_event.h"
 #include "utils/basenode_def_internal.h"
 #include "tools/ringbuffer.h"
+#include "tools/function_traits.h"
 #include "coro_rpc/coro_rpc_server.h"
 #include "coro_rpc/coro_rpc_client.h"
 #include "module_router.h"
@@ -9,6 +10,7 @@
 #include <string>
 #include <string_view>
 #include <typeinfo>
+#include <type_traits>
 
 // 前向声明
 namespace BaseNode {
@@ -67,19 +69,19 @@ public:
      * @param self 对象指针
      */
     template <auto first, auto... functions>
-    void RegisterService(decltype(first) *self) {
+    void RegisterService(typename ToolBox::FunctionTraits<decltype(first)>::class_type *self) {
         rpc_server_.template RegisterService<first, functions...>(self);
     }
 
     /**
      * @brief 调用RPC服务（使用默认5秒超时）
-     * @tparam func RPC函数指针
+     * @tparam func RPC函数指针（支持非成员函数和成员函数指针）
      * @tparam Args 参数类型
      * @param args RPC函数参数
      * @return 返回协程Task，包含RPC调用结果
      */
     template <auto func, typename... Args>
-    auto Call(Args &&...args) -> ToolBox::coro::Task<ToolBox::CoroRpc::async_rpc_result_value_t<std::invoke_result_t<decltype(func), Args...>>, ToolBox::coro::SharedLooperExecutor> {
+    auto Call(Args &&...args) -> ToolBox::coro::Task<ToolBox::CoroRpc::async_rpc_result_value_t<typename ToolBox::FunctionTraits<decltype(func)>::return_type>, ToolBox::coro::SharedLooperExecutor> {
         return rpc_client_.template Call<func>(std::forward<Args>(args)...);
     }
 

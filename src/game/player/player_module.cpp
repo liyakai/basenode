@@ -1,5 +1,5 @@
 #include "player_module.h"
-#include "utils/basenode_def_internal.h"
+#include "guild/guild_module.h"
 
 namespace BaseNode
 {
@@ -24,7 +24,10 @@ ErrorCode Player::DoUninit()
 ErrorCode Player::OnLogin(uint64_t player_id)
 {
     BaseNodeLogInfo("PlayerModule OnLogin, player_id: %llu", player_id);
-    
+    // 异步调用Guild模块的OnPlayerLogin RPC服务（直接使用成员函数指针）
+    Call<&Guild::OnPlayerLogin>(player_id).then([](auto result) {
+        BaseNodeLogInfo("PlayerModule OnLogin: Guild::OnPlayerLogin completed, result: %d", static_cast<int>(*result));
+    });
     return ErrorCode::BN_SUCCESS;
 }
 
