@@ -1,8 +1,9 @@
 #include "plugin_system_proc.h"
-#include <string>
-#include <filesystem>
 #include "utils/basenode_def_internal.h"
 #include "tools/safe_call.h"
+#include <string>
+#include <vector>
+#include <filesystem>
 #if defined(PLATFORM_WINDOWS)
     #include <windows.h>
 #else
@@ -15,10 +16,26 @@ namespace BaseNode
 int PluginLoadManager::Init()
 {
     std::filesystem::path cwd = std::filesystem::current_path();
-    LoadPluginSo_(cwd.string() + "/lib/libgatenode.so");
-    LoadPluginSo_(cwd.string() + "/lib/libplayer_module.so");
-    LoadPluginSo_(cwd.string() + "/lib/libguild_module.so");
-    LoadPluginSo_(cwd.string() + "/lib/libnetwork.so");
+    std::string lib_dir = cwd.string() + "/lib";
+    
+    // 定义需要加载的模块列表（按加载顺序）
+    std::vector<std::string> modules = {
+        "libbasenode_core.so",  // 核心库必须最先加载，确保 ModuleRouter 符号在全局符号表中
+        "libgatenode.so",
+        "libplayer_module.so",
+        "libguild_module.so",
+        "libnetwork.so"
+    };
+    
+    // 依次加载所有模块
+    for (const auto& module : modules) {
+        std::string module_path = lib_dir + "/" + module;
+        if (LoadPluginSo_(module_path) != 0) {
+            BaseNodeLogError("[PluginLoadManager] Failed to load module: %s", module_path.c_str());
+            return -1;
+        }
+    }
+    
     return 0;
 }
 
@@ -55,11 +72,13 @@ int PluginLoadManager::LoadPluginSo_(const std::string& so_path)
 LibHandle PluginLoadManager::LoadDynamicLibrary_(const std::string& so_path)
 {
 #if defined(PLATFORM_WINDOWS)
-    return LoadLibraryA(path.c_str());
+    return LoadLibraryA(so_path.c_str());
 #else
-    // 使用 RTLD_NOW 确保所有符号在加载时立即解析
+    // 使用 RTLD_NOW | RTLD_GLOBAL 确保：
+    // 1. 所有符号在加载时立即解析（RTLD_NOW）
+    // 2. 所有共享库共享全局符号空间（RTLD_GLOBAL），这样 Singleton 的静态变量在所有库中共享
     // 这对于 std::thread 等需要早期初始化的 C++ 运行时组件很重要
-    return dlopen(so_path.c_str(), RTLD_LAZY);
+    return dlopen(so_path.c_str(), RTLD_NOW | RTLD_GLOBAL);
 #endif
 }
 

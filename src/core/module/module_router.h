@@ -39,7 +39,7 @@ public:
      * @param protocol_data 协议数据包
      * @return 是否成功路由
      */
-    ErrorCode RouteProtocolPacket(std::string_view protocol_data);
+    ErrorCode RouteProtocolPacket(std::string &&protocol_data);
 
 private:
 
@@ -59,16 +59,16 @@ private:
 
     /**
      * @brief 路由RPC请求到对应的模块
-     * @param rpc_data RPC数据包
+     * @param rpc_data RPC数据包（右值引用，强制移动语义，避免拷贝）
      * @return 错误码
      */
-    ErrorCode RouteRpcRequest(std::string_view rpc_data);
+    ErrorCode RouteRpcRequest(std::string &&rpc_data);
     /**
      * @brief 路由RPC回包到对应的模块
-     * @param rpc_data RPC数据包
+     * @param rpc_data RPC数据包（右值引用，强制移动语义，避免拷贝）
      * @return 错误码
      */
-    ErrorCode RouteRpcResponse(std::string_view rpc_data);
+    ErrorCode RouteRpcResponse(std::string &&rpc_data);
 
 
 private:
@@ -79,7 +79,7 @@ private:
      */
      uint32_t ExtractServiceIdFromRpc_(std::string_view rpc_data);
 
-     ErrorCode RouteRpcData_(std::string_view rpc_data, ModuleEvent::EventType event_type);
+     ErrorCode RouteRpcData_(std::string &&rpc_data, ModuleEvent::EventType event_type);
 
 
 
@@ -90,7 +90,7 @@ private:
     // 模块ID到模块的映射表（用于快速查找）
     std::unordered_map<uint32_t, IModule*> module_id_to_module_;
 
-    IModule* network_module_;
+    IModule* network_module_ = nullptr;
 };
 
 #define ModuleRouterMgr ToolBox::Singleton<BaseNode::ModuleRouter>::Instance()

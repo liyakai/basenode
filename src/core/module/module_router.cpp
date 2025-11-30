@@ -2,6 +2,7 @@
 #include "module_event.h"
 #include "module_interface.h"
 #include "utils/basenode_def_internal.h"
+#include "tools/string_util.h"
 #include <cstdint>
 #include <string>
 #include <string_view>
@@ -18,15 +19,27 @@ ErrorCode ModuleRouter::RegisterModule(IModule* module,  bool is_network_module 
 
     // 获取模块ID
     uint32_t module_id = module->GetModuleId();
+    
+    BaseNodeLogDebug("[ModuleRouter] RegisterModule: this=%p, module=%p, is_network_module=%d, service_id_to_module_ size=%zu", 
+        this, module, is_network_module, service_id_to_module_.size());
 
     if (is_network_module) {
         network_module_ = module;
 
-        BaseNodeLogInfo("[ModuleRouter] RegisterModule: module (id: %u) registered with network service", module_id);
+        BaseNodeLogInfo("[ModuleRouter] RegisterModule: module (id: %u, class: %s) registered with network service", module_id, module->GetModuleClassName().c_str());
     } else {
+        // 检查模块是否已经是网络模块
+        if (network_module_ == module) {
+            BaseNodeLogWarn("[ModuleRouter] RegisterModule: module (id: %u, class: %s) is already registered as network module, skip normal registration", module_id, module->GetModuleClassName().c_str());
+            return ErrorCode::BN_SUCCESS;
+        }
+        
+        BaseNodeLogDebug("[ModuleRouter] RegisterModule: checking normal registration for module (id: %u, class: %s), network_module_: %p, module: %p", 
+            module_id, module->GetModuleClassName().c_str(), network_module_, module);
+        
         // 检查模块是否已经注册
         if (module_id_to_module_.find(module_id) != module_id_to_module_.end()) {
-            BaseNodeLogWarn("[ModuleRouter] RegisterModule: module (id: %u) already registered", module_id);
+            BaseNodeLogWarn("[ModuleRouter] RegisterModule: module (id: %u, class: %s) already registered", module_id, module->GetModuleClassName().c_str());
             return ErrorCode::BN_MODULE_ALREADY_REGISTERED;
         }
 
@@ -34,7 +47,7 @@ ErrorCode ModuleRouter::RegisterModule(IModule* module,  bool is_network_module 
         std::vector<uint32_t> service_ids = module->GetAllServiceHandlerKeys();
 
         if (service_ids.empty()) {
-            BaseNodeLogWarn("[ModuleRouter] RegisterModule: module (id: %u) has no service handlers", module_id);
+            BaseNodeLogWarn("[ModuleRouter] RegisterModule: module (id: %u, class: %s) has no service handlers", module_id, module->GetModuleClassName().c_str());
         }
 
         // 注册服务ID到模块的映射
@@ -51,22 +64,22 @@ ErrorCode ModuleRouter::RegisterModule(IModule* module,  bool is_network_module 
                 return ErrorCode::BN_SERVICE_ID_ALREADY_REGISTERED;
             }
             service_id_to_module_[service_id] = module;
-            BaseNodeLogDebug("[ModuleRouter] RegisterModule: service_id %u -> module_id %u", service_id, module_id);
+            BaseNodeLogDebug("[ModuleRouter] RegisterService: service_id %u -> module_id %u (class: %s), service_id_to_module_ size: %zu", service_id, module_id, module->GetModuleClassName().c_str(), service_id_to_module_.size());
         }
 
         // 注册模块ID到模块的映射
         module_id_to_module_[module_id] = module;
 
-        module->SetClientSendCallback([this](std::string_view && data){
-            RouteRpcRequest(data);
+        module->SetClientSendCallback([this](std::string &&data){
+            RouteRpcRequest(std::move(data));
         });
-        module->SetServerSendCallback([this](uint64_t conn_id, std::string_view&& data)
+        module->SetServerSendCallback([this](uint64_t conn_id, std::string &&data)
         {
-            RouteRpcResponse(data);
+            RouteRpcResponse(std::move(data));
         });
 
-        BaseNodeLogInfo("[ModuleRouter] RegisterModule: module (id: %u) registered with %zu services", 
-            module_id, service_ids.size());
+        BaseNodeLogInfo("[ModuleRouter] RegisterService: module (id: %u, class: %s) registered with %zu services, services: %s", 
+            module_id, module->GetModuleClassName().c_str(), service_ids.size(), ToolBox::VectorToStr(service_ids).c_str());
     }
 
     return ErrorCode::BN_SUCCESS;
@@ -100,10 +113,13 @@ ErrorCode ModuleRouter::UnregisterModule(IModule* module)
 
 IModule* ModuleRouter::FindModuleByServiceId(uint32_t service_id) const
 {
+    BaseNodeLogDebug("[ModuleRouter] FindModuleByServiceId: this=%p, service_id=%u, service_id_to_module_ size=%zu", 
+        this, service_id, service_id_to_module_.size());
     auto it = service_id_to_module_.find(service_id);
     if (it != service_id_to_module_.end()) {
         return it->second;
     }
+    BaseNodeLogError("[ModuleRouter] FindModuleByServiceId: service_id %u not found in any module, service_id_to_module_ size: %zu", service_id, service_id_to_module_.size());
     return nullptr;
 }
 
@@ -116,20 +132,20 @@ IModule* ModuleRouter::FindModuleById(uint32_t module_id) const
     return nullptr;
 }
 
-ErrorCode ModuleRouter::RouteRpcRequest(std::string_view rpc_data)
+ErrorCode ModuleRouter::RouteRpcRequest(std::string &&rpc_data)
 {
-    return RouteRpcData_(rpc_data, ModuleEvent::EventType::ET_RPC_REQUEST);
+    return RouteRpcData_(std::move(rpc_data), ModuleEvent::EventType::ET_RPC_REQUEST);
 }
 
-ErrorCode ModuleRouter::RouteRpcResponse(std::string_view rpc_data)
+ErrorCode ModuleRouter::RouteRpcResponse(std::string &&rpc_data)
 {
-    return RouteRpcData_(rpc_data, ModuleEvent::EventType::ET_RPC_RESPONSE);
+    return RouteRpcData_(std::move(rpc_data), ModuleEvent::EventType::ET_RPC_RESPONSE);
 }
 
-ErrorCode ModuleRouter::RouteProtocolPacket(std::string_view protocol_data)
+ErrorCode ModuleRouter::RouteProtocolPacket(std::string &&protocol_data)
 {
     // 网络协议包也是RPC格式，使用相同的路由逻辑
-    return RouteRpcRequest(protocol_data);
+    return RouteRpcRequest(std::move(protocol_data));
 }
 
 uint32_t ModuleRouter::ExtractServiceIdFromRpc_(std::string_view rpc_data)
@@ -149,19 +165,24 @@ uint32_t ModuleRouter::ExtractServiceIdFromRpc_(std::string_view rpc_data)
     return service_id;
 }
 
-ErrorCode ModuleRouter::RouteRpcData_(std::string_view rpc_data, ModuleEvent::EventType event_type)
+ErrorCode ModuleRouter::RouteRpcData_(std::string &&rpc_data, ModuleEvent::EventType event_type)
 {
-    // 从RPC数据包中提取服务ID
-    uint32_t service_id = ExtractServiceIdFromRpc_(rpc_data);
+    // 从RPC数据包中提取服务ID（使用 string_view 避免拷贝）
+    uint32_t service_id = ExtractServiceIdFromRpc_(std::string_view(rpc_data));
     if (service_id == 0) {
         BaseNodeLogError("[ModuleRouter] RouteRpcRequest: failed to extract service_id from RPC data");
         return ErrorCode::BN_INVALID_ARGUMENTS;
     }
 
     // 创建RPC请求事件并推送到模块
+    // 使用移动语义，避免数据拷贝
     ModuleEvent event;
     event.type_ = event_type;
-    event.data_.rpc_request_.rpc_req_data_ = rpc_data;
+    if (event_type == ModuleEvent::EventType::ET_RPC_REQUEST) {
+        event.data_.rpc_request_.rpc_req_data_ = std::move(rpc_data);
+    } else if (event_type == ModuleEvent::EventType::ET_RPC_RESPONSE) {
+        event.data_.rpc_rsponse_.rpc_rsp_data_ = std::move(rpc_data);
+    }
 
     // 查找对应的模块
     IModule* module = FindModuleByServiceId(service_id);
@@ -174,6 +195,7 @@ ErrorCode ModuleRouter::RouteRpcData_(std::string_view rpc_data, ModuleEvent::Ev
                 return err;
             }
         }
+        BaseNodeLogError("[ModuleRouter] RouteRpcData(type:%d): service_id %u not found in any module", event_type, service_id);
         return ErrorCode::BN_SERVICE_ID_NOT_FOUND;
     }
 
@@ -191,3 +213,14 @@ ErrorCode ModuleRouter::RouteRpcData_(std::string_view rpc_data, ModuleEvent::Ev
 
 } // namespace BaseNode
 
+extern "C" SO_EXPORT_SYMBOL void SO_EXPORT_FUNC_INIT() {
+    // ModuleRouterMgr->Init();
+}
+
+extern "C" SO_EXPORT_SYMBOL void SO_EXPORT_FUNC_UPDATE() {
+    // ModuleRouterMgr->Update();
+}
+
+extern "C" SO_EXPORT_SYMBOL void SO_EXPORT_FUNC_UNINIT() {
+    // ModuleRouterMgr->UnInit();  // 调用基类的UnInit方法
+}

@@ -41,8 +41,8 @@ public:
 
     ErrorCode PushModuleEvent(ModuleEvent&& module_event);
 
-    ErrorCode SetServerSendCallback(std::function<void(uint64_t, std::string_view &&)>&& callback);
-    ErrorCode SetClientSendCallback(std::function<void(std::string_view &&)>&& callback);
+    ErrorCode SetServerSendCallback(std::function<void(uint64_t, std::string&&)>&& callback);
+    ErrorCode SetClientSendCallback(std::function<void(std::string&&)>&& callback);
 
     std::vector<uint32_t> GetAllServiceHandlerKeys();
     
@@ -51,6 +51,12 @@ public:
      * @return 模块ID（基于类名的MD5哈希）
      */
     uint32_t GetModuleId() const;
+
+    /**
+     * @brief 获取最终子类的类名
+     * @return 类名
+     */
+    std::string GetModuleClassName() const;
 
     /**
      * @brief 注册RPC服务函数（非成员函数）
@@ -81,7 +87,7 @@ public:
      * @return 返回协程Task，包含RPC调用结果
      */
     template <auto func, typename... Args>
-    auto Call(Args &&...args) -> ToolBox::coro::Task<ToolBox::CoroRpc::async_rpc_result_value_t<typename ToolBox::FunctionTraits<decltype(func)>::return_type>, ToolBox::coro::SharedLooperExecutor> {
+    auto CallModuleService(Args &&...args) -> ToolBox::coro::Task<ToolBox::CoroRpc::async_rpc_result_value_t<typename ToolBox::FunctionTraits<decltype(func)>::return_type>, ToolBox::coro::SharedLooperExecutor> {
         return rpc_client_.template Call<func>(std::forward<Args>(args)...);
     }
 
@@ -105,8 +111,6 @@ protected:
     
 private:
     void ProcessRingBufferData_();
-    // 获取最终子类的类名
-    std::string GetFinalClassName_() const;
     /**
      * @brief 注册模块到路由管理器
      * 在基类Init()中自动调用，子类无需关心

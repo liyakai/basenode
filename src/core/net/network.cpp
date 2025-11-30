@@ -42,19 +42,19 @@ ErrorCode Network::DoInit()
     
     // 设置网络接收回调，使用ModuleRouter路由RPC数据包
     network_impl_->SetOnReceived([this](ToolBox::NetworkType type, uint64_t opaque, uint64_t conn_id, const char* data, size_t size) {
-        // 将接收到的数据路由到对应的模块
-        std::string_view data_view(data, size);
-        ErrorCode err = ModuleRouterMgr->RouteProtocolPacket(data_view);
+        // 创建 std::string 并移动传递，避免拷贝
+        std::string data_str(data, size);
+        ErrorCode err = ModuleRouterMgr->RouteProtocolPacket(std::move(data_str));
         if (err != ErrorCode::BN_SUCCESS) {
             BaseNodeLogWarn("[Network] Failed to route protocol packet, error: %d, size: %zu", static_cast<int>(err), size);
         }
     });
 
-    SetClientSendCallback([this](std::string_view &&){
+    SetClientSendCallback([this](std::string &&){
 
     });
 
-    SetServerSendCallback([this](uint64_t, std::string_view &&){
+    SetServerSendCallback([this](uint64_t, std::string &&){
 
     });
     

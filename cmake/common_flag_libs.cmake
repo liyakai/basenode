@@ -43,9 +43,88 @@ function(ADD_SUBDIRECTORIES result cur_dir)
     set(${result} ${${result}} ${tmp_dirlist} PARENT_SCOPE)
 endfunction()
 
+# 配置核心共享库的通用属性（内部函数）
+# 参数:
+#   target_name - 目标名称
+function(CONFIGURE_CORE_LIBRARY target_name)
+    target_include_directories(${target_name} PUBLIC
+        ${ROOT_PATH}/3rdparty/toolbox/include
+        ${SRC_CORE_PATH}
+        ${SRC_CORE_PATH}/module
+    )
+    target_link_libraries(${target_name} PUBLIC toolbox)
+    set_target_properties(${target_name} PROPERTIES
+        ARCHIVE_OUTPUT_DIRECTORY ${ROOT_PATH}/lib
+        LIBRARY_OUTPUT_DIRECTORY ${ROOT_PATH}/lib
+        RUNTIME_OUTPUT_DIRECTORY ${ROOT_PATH}/lib
+    )
+    # 导出所有符号，让其他共享库可以访问
+    target_compile_options(${target_name} PRIVATE -fvisibility=default)
+    target_link_options(${target_name} PRIVATE -rdynamic)
+    add_custom_command(TARGET ${target_name} PRE_BUILD
+        COMMAND ${CMAKE_COMMAND} -E make_directory ${ROOT_PATH}/lib
+    )
+endfunction()
 
+# 创建并配置核心共享库
+# 参数:
+#   name - 库名称（也是输出文件名）
+#   source_files... - 一个或多个源文件路径
+# 示例:
+#   ADD_CORE_LIBRARY(basenode_core 
+#       ${SRC_PATH}/core/module/module_router.cpp
+#       ${SRC_PATH}/core/module/module_interface.cpp
+#   )
+function(ADD_CORE_LIBRARY name)
+    # 收集所有源文件
+    set(${name}_SRCS ${ARGN})
+    
+    # 创建共享库
+    add_library(${name} SHARED ${${name}_SRCS})
+    
+    # 配置核心库属性
+    CONFIGURE_CORE_LIBRARY(${name})
+endfunction()
 
-
+# 配置模块共享库的通用属性
+# 参数:
+#   target_name - 目标名称
+#   source_dir - 源文件目录路径
+function(CONFIGURE_MODULE_LIBRARY target_name source_dir)
+    # 设置头文件搜索路径
+    target_include_directories(${target_name} PRIVATE
+        ${source_dir}
+        ${source_dir}/..
+        ${ROOT_PATH}/3rdparty/toolbox/include
+        ${SRC_CORE_PATH}
+        ${SRC_CORE_PATH}/module
+    )
+    # 链接 basenode_core 库，以访问 ModuleRouter
+    target_link_libraries(${target_name} PRIVATE basenode_core)
+    # 设置所有构建类型的输出路径
+    set_target_properties(${target_name} PROPERTIES
+        ARCHIVE_OUTPUT_DIRECTORY ${ROOT_PATH}/lib
+        LIBRARY_OUTPUT_DIRECTORY ${ROOT_PATH}/lib
+        RUNTIME_OUTPUT_DIRECTORY ${ROOT_PATH}/lib
+    )
+    # 确保目标目录存在
+    add_custom_command(TARGET ${target_name} PRE_BUILD
+        COMMAND ${CMAKE_COMMAND} -E make_directory ${ROOT_PATH}/lib
+    )
+    # 设置编译选项
+    target_compile_options(${target_name} PRIVATE 
+        -fvisibility=hidden             # 隐藏所有符号
+        -fvisibility-inlines-hidden     # 隐藏内联函数符号
+        -fmacro-prefix-map=${ROOT_PATH}/=  # 设置 __FILE__ 显示相对路径
+    )
+    # 如果是 Debug 构建类型，添加调试选项
+    if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+        target_compile_options(${target_name} PRIVATE 
+            -g3                              # 生成详细的调试信息（包括宏定义）
+            -O0                              # 禁用优化，确保调试时代码不被优化掉
+        )
+    endif()
+endfunction()
 
 # 从指定目录生成共享库
 # 参数:
@@ -62,46 +141,17 @@ function(ADD_SHARED_LIBRARY_FROM_DIR name source_dir)
 
     # 收集源文件
     AUX_SOURCE_DIRECTORY(${source_dir} ${name}_SRCS)
-    AUX_SOURCE_DIRECTORY(${SRC_CORE_PATH}/module ${name}_SRCS)
+    # 收集 module 目录的源文件，但排除 module_router.cpp 和 module_interface.cpp（它们在 basenode_core 中编译）
+    AUX_SOURCE_DIRECTORY(${SRC_CORE_PATH}/module ${name}_TMP_MODULE_SRCS)
+    list(FILTER ${name}_TMP_MODULE_SRCS EXCLUDE REGEX ".*module_router\\.cpp$")
+    list(FILTER ${name}_TMP_MODULE_SRCS EXCLUDE REGEX ".*module_interface\\.cpp$")
+    list(APPEND ${name}_SRCS ${${name}_TMP_MODULE_SRCS})
     Message(STATUS "${name}_SRCS -> ${${name}_SRCS}")
     # 创建共享库
     ADD_LIBRARY(${name} SHARED ${${name}_SRCS})
-
-    # 设置头文件搜索路径
-    INCLUDE_DIRECTORIES(
-        ${source_dir}
-        ${source_dir}/..
-        ${ROOT_PATH}/3rdparty/toolbox/include
-        ${SRC_CORE_PATH}
-        ${SRC_CORE_PATH}/module
-    )
-
-    # 设置所有构建类型的输出路径
-    set_target_properties(${name} PROPERTIES
-        ARCHIVE_OUTPUT_DIRECTORY ${output_dir}
-        LIBRARY_OUTPUT_DIRECTORY ${output_dir}
-        RUNTIME_OUTPUT_DIRECTORY ${output_dir}
-    )
-
-    # 确保目标目录存在
-    add_custom_command(TARGET ${name} PRE_BUILD
-        COMMAND ${CMAKE_COMMAND} -E make_directory ${output_dir}
-    )
-
-    # 设置编译选项
-    target_compile_options(${name} PRIVATE 
-        -fvisibility=hidden             # 隐藏所有符号
-        -fvisibility-inlines-hidden     # 隐藏内联函数符号
-        -fmacro-prefix-map=${ROOT_PATH}/=  # 设置 __FILE__ 显示相对路径
-    )
     
-    # 如果是 Debug 构建类型，添加调试选项
-    if(CMAKE_BUILD_TYPE STREQUAL "Debug")
-        target_compile_options(${name} PRIVATE 
-            -g3                              # 生成详细的调试信息（包括宏定义）
-            -O0                              # 禁用优化，确保调试时代码不被优化掉
-        )
-    endif()
+    # 配置模块库属性
+    CONFIGURE_MODULE_LIBRARY(${name} ${source_dir})
 endfunction()
 
 

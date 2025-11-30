@@ -5,13 +5,18 @@
 namespace BaseNode
 {
     ErrorCode IModule::Init() {
-        // 先注册模块到路由管理器
-        ErrorCode err = RegisterToRouter_();
+        // 先调用子类的初始化逻辑（注册RPC服务）
+        ErrorCode err = DoInit();
+        if (err != ErrorCode::BN_SUCCESS) {
+            BaseNodeLogError("[module] DoInit failed, error: %d", err);
+            return err;
+        }
+        // 然后注册模块到路由管理器（此时服务已经注册）
+        err = RegisterToRouter_();
         if (err != ErrorCode::BN_SUCCESS) {
             BaseNodeLogError("[module] Failed to register module (id: %u) to router, error: %d", GetModuleId(), err);
             return err;
         }
-        DoInit();  // 然后调用子类的初始化逻辑
         return ErrorCode::BN_SUCCESS;
     }
 
@@ -47,7 +52,7 @@ namespace BaseNode
         return ErrorCode::BN_SUCCESS;
     }
 
-    ErrorCode IModule::SetServerSendCallback(std::function<void(uint64_t, std::string_view &&)>&& callback)
+    ErrorCode IModule::SetServerSendCallback(std::function<void(uint64_t, std::string&&)>&& callback)
     {
         ToolBox::CoroRpc::Errc errc = rpc_server_.SetSendCallback(std::move(callback));
         if (errc != ToolBox::CoroRpc::Errc::SUCCESS) {
@@ -57,7 +62,7 @@ namespace BaseNode
         return ErrorCode::BN_SUCCESS;
     }
 
-    ErrorCode IModule::SetClientSendCallback(std::function<void(std::string_view &&)>&& callback)
+    ErrorCode IModule::SetClientSendCallback(std::function<void(std::string&&)>&& callback)
     {
         rpc_client_.SetSendCallback(std::move(callback));
         return ErrorCode::BN_SUCCESS;
@@ -70,7 +75,14 @@ namespace BaseNode
 
     uint32_t IModule::GetModuleId() const
     {
-        return MD5Hash32Constexpr(GetFinalClassName_());
+        return MD5Hash32Constexpr(GetModuleClassName());
+    }
+
+    // 获取最终子类的类名
+    std::string IModule::GetModuleClassName() const
+    {
+        const char* name = typeid(*this).name();
+        return name;
     }
 
     void IModule::ProcessRingBufferData_()
@@ -82,10 +94,10 @@ namespace BaseNode
             switch (event.type_)
             {
             case ModuleEvent::EventType::ET_RPC_REQUEST:
-                rpc_server_.OnRecvReq(0, event.data_.rpc_request_.rpc_req_data_);
+                rpc_server_.OnRecvReq(0, std::string_view(event.data_.rpc_request_.rpc_req_data_));
                 break;
             case ModuleEvent::EventType::ET_RPC_RESPONSE:
-                rpc_client_.OnRecvResp(event.data_.rpc_rsponse_.rpc_rsp_data_);
+                rpc_client_.OnRecvResp(std::string_view(event.data_.rpc_rsponse_.rpc_rsp_data_));
             default:
                 BaseNodeLogError("[module] invalid event type:%d", event.type_);
                 break;
@@ -93,12 +105,7 @@ namespace BaseNode
             return;
         }
     }
-    // 获取最终子类的类名
-    std::string IModule::GetFinalClassName_() const
-    {
-        const char* name = typeid(*this).name();
-        return name;
-    }
+
 
     ErrorCode IModule::RegisterToRouter_()
     {

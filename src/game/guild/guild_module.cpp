@@ -8,7 +8,7 @@ ErrorCode Guild::DoInit()
 {
     BaseNodeLogInfo("GuildModule Init");
     // 注册RPC服务函数（直接使用成员函数指针）
-    RegisterService<&Guild::OnPlayerLogin>(GuildMgr);
+    RegisterService<&Guild::OnPlayerLogin>(this);
     return ErrorCode::BN_SUCCESS;
 }
 

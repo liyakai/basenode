@@ -25,18 +25,25 @@ endif()
 set(toolbox_dir ${ROOT_PATH}/3rdparty/toolbox)
 add_subdirectory(${toolbox_dir} ${CMAKE_BINARY_DIR}/toolbox_build EXCLUDE_FROM_ALL)
 
-# 给组件生成共享库
-set(gatenode_dir ${SRC_PATH}/framework/gatenode)
-ADD_SHARED_LIBRARY_FROM_DIR(gatenode ${gatenode_dir})
+# ============================================================================
+# 创建核心共享库 basenode_core
+# 包含 ModuleRouter 和 IModule 基础实现，确保所有模块共享同一个实例
+# ============================================================================
+ADD_CORE_LIBRARY(basenode_core 
+    ${SRC_PATH}/core/module/module_router.cpp
+    ${SRC_PATH}/core/module/module_interface.cpp
+)
 
-set(player_module_dir ${SRC_PATH}/game/player)
-ADD_SHARED_LIBRARY_FROM_DIR(player_module ${player_module_dir})
+# ============================================================================
+# 创建模块共享库
+# 所有模块都链接 basenode_core，共享同一个 ModuleRouter 实例
+# ============================================================================
+ADD_SHARED_LIBRARY_FROM_DIR(gatenode ${SRC_PATH}/framework/gatenode)
+ADD_SHARED_LIBRARY_FROM_DIR(player_module ${SRC_PATH}/game/player)
+ADD_SHARED_LIBRARY_FROM_DIR(guild_module ${SRC_PATH}/game/guild)
+ADD_SHARED_LIBRARY_FROM_DIR(network ${SRC_PATH}/core/net)
 
-set(guild_module_dir ${SRC_PATH}/game/guild)
-ADD_SHARED_LIBRARY_FROM_DIR(guild_module ${guild_module_dir})
-
-set(network_dir ${SRC_PATH}/core/net)
-ADD_SHARED_LIBRARY_FROM_DIR(network ${network_dir})
+# Network 模块需要特殊链接选项
 target_link_options(network PRIVATE
     -Wl,--whole-archive
     $<TARGET_FILE:toolbox>
@@ -46,8 +53,14 @@ target_link_options(network PRIVATE
 )
 
 
-# 生成底座
-ADD_EXECUTABLE_FROM_DIRS(basenode ${SRC_PATH}/boot ${SRC_PATH}/core/plugin_system ${SRC_PATH}/core/module LIBS dl pthread)
+# ============================================================================
+# 生成主程序 basenode
+# ============================================================================
+ADD_EXECUTABLE_FROM_DIRS(basenode 
+    ${SRC_PATH}/boot 
+    ${SRC_PATH}/core/plugin_system 
+    LIBS dl pthread basenode_core
+)
 
 
 message(STATUS "SRC_PATH -> ${SRC_PATH}")
