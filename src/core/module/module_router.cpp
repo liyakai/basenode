@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <string>
 #include <string_view>
+#include <tuple>
 
 namespace BaseNode
 {
@@ -123,7 +124,7 @@ IModule* ModuleRouter::FindModuleByServiceId(uint32_t service_id) const
     return nullptr;
 }
 
-IModule* ModuleRouter::FindModuleById(uint32_t module_id) const
+IModule* ModuleRouter::FindModuleByModuleId(uint32_t module_id) const
 {
     auto it = module_id_to_module_.find(module_id);
     if (it != module_id_to_module_.end()) {
@@ -148,7 +149,7 @@ ErrorCode ModuleRouter::RouteProtocolPacket(std::string &&protocol_data)
     return RouteRpcRequest(std::move(protocol_data));
 }
 
-uint32_t ModuleRouter::ExtractServiceIdFromRpc_(std::string_view rpc_data)
+std::tuple<uint32_t, uint64_t> ModuleRouter::ExtractServiceIdClientIDFromRpc_(std::string_view rpc_data)
 {
     using namespace ToolBox::CoroRpc;
     
@@ -156,36 +157,40 @@ uint32_t ModuleRouter::ExtractServiceIdFromRpc_(std::string_view rpc_data)
     CoroRpcProtocol::ReqHeader header;
     Errc err = CoroRpcProtocol::ReadHeader(rpc_data, header);
     if (err != Errc::SUCCESS) {
-        BaseNodeLogError("[ModuleRouter] ExtractServiceIdFromRpc_: failed to read header, err: %d", static_cast<int>(err));
-        return 0;
+        BaseNodeLogError("[ModuleRouter] ExtractServiceIdClientIDFromRpc_: failed to read header, err: %d", static_cast<int>(err));
+        return std::tuple<uint32_t, uint64_t>(0, 0);;
     }
 
     // 从协议头中提取服务ID
     uint32_t service_id = CoroRpcProtocol::GetRpcFuncKey(header);
-    return service_id;
+    uint64_t client_id = CoroRpcProtocol::GetClientID(header);
+    return std::tuple<uint32_t, uint64_t>(service_id, client_id);
 }
 
 ErrorCode ModuleRouter::RouteRpcData_(std::string &&rpc_data, ModuleEvent::EventType event_type)
 {
-    // 从RPC数据包中提取服务ID（使用 string_view 避免拷贝）
-    uint32_t service_id = ExtractServiceIdFromRpc_(std::string_view(rpc_data));
-    if (service_id == 0) {
+    auto [service_id, client_id] = ExtractServiceIdClientIDFromRpc_(std::string_view(rpc_data));
+    if (service_id == 0 || client_id == 0) {
         BaseNodeLogError("[ModuleRouter] RouteRpcRequest: failed to extract service_id from RPC data");
         return ErrorCode::BN_INVALID_ARGUMENTS;
     }
 
-    // 创建RPC请求事件并推送到模块
-    // 使用移动语义，避免数据拷贝
+    uint32_t module_service_id = 0;
+    IModule* module = nullptr;
     ModuleEvent event;
     event.type_ = event_type;
     if (event_type == ModuleEvent::EventType::ET_RPC_REQUEST) {
         event.data_.rpc_request_.rpc_req_data_ = std::move(rpc_data);
+        module_service_id = service_id;
+        module = FindModuleByServiceId(module_service_id);
     } else if (event_type == ModuleEvent::EventType::ET_RPC_RESPONSE) {
         event.data_.rpc_rsponse_.rpc_rsp_data_ = std::move(rpc_data);
+        module_service_id = client_id;
+        module = FindModuleByModuleId(module_service_id);
     }
 
     // 查找对应的模块
-    IModule* module = FindModuleByServiceId(service_id);
+
     if (!module) {
         if (network_module_) 
         {
@@ -195,7 +200,7 @@ ErrorCode ModuleRouter::RouteRpcData_(std::string &&rpc_data, ModuleEvent::Event
                 return err;
             }
         }
-        BaseNodeLogError("[ModuleRouter] RouteRpcData(type:%d): service_id %u not found in any module", event_type, service_id);
+        BaseNodeLogError("[ModuleRouter] RouteRpcData(type:%d): module_service_id %u not found in any module", event_type, module_service_id);
         return ErrorCode::BN_SERVICE_ID_NOT_FOUND;
     }
 
@@ -205,8 +210,8 @@ ErrorCode ModuleRouter::RouteRpcData_(std::string &&rpc_data, ModuleEvent::Event
         return err;
     }
 
-    BaseNodeLogDebug("[ModuleRouter] RouteRpcData(type:%d): routed service_id %u to module_id %u", 
-                    event_type, service_id, module->GetModuleId());
+    BaseNodeLogDebug("[ModuleRouter] RouteRpcData(type:%d): routed module_service_id %u to module_id %u", 
+                    event_type, module_service_id, module->GetModuleId());
 
     return ErrorCode::BN_SUCCESS;
 }

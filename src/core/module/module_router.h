@@ -3,6 +3,8 @@
 #include "tools/singleton.h"
 #include "utils/basenode_def_internal.h"
 #include "module_event.h"
+#include <cstdint>
+#include <tuple>
 #include <unordered_map>
 #include <vector>
 #include <string_view>
@@ -55,7 +57,7 @@ private:
      * @param module_id 模块ID
      * @return 模块指针，如果未找到返回nullptr
      */
-    IModule* FindModuleById(uint32_t module_id) const;
+    IModule* FindModuleByModuleId(uint32_t module_id) const;
 
     /**
      * @brief 路由RPC请求到对应的模块
@@ -77,7 +79,7 @@ private:
      * @param rpc_data RPC数据包
      * @return 服务ID，如果提取失败返回0
      */
-     uint32_t ExtractServiceIdFromRpc_(std::string_view rpc_data);
+     std::tuple<uint32_t, uint64_t> ExtractServiceIdClientIDFromRpc_(std::string_view rpc_data);
 
      ErrorCode RouteRpcData_(std::string &&rpc_data, ModuleEvent::EventType event_type);
 

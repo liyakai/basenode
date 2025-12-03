@@ -17,6 +17,7 @@ namespace BaseNode
             BaseNodeLogError("[module] Failed to register module (id: %u) to router, error: %d", GetModuleId(), err);
             return err;
         }
+        rpc_client_.set_client_id(GetModuleId());
         return ErrorCode::BN_SUCCESS;
     }
 
@@ -98,6 +99,7 @@ namespace BaseNode
                 break;
             case ModuleEvent::EventType::ET_RPC_RESPONSE:
                 rpc_client_.OnRecvResp(std::string_view(event.data_.rpc_rsponse_.rpc_rsp_data_));
+                break;
             default:
                 BaseNodeLogError("[module] invalid event type:%d", event.type_);
                 break;
