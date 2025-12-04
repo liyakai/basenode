@@ -41,6 +41,7 @@ int PluginLoadManager::Init()
 
 int PluginLoadManager::Update()
 {
+    BaseNodeLogDebug("PluginLoadManager Update------------------------------------------------------------------------------------------------");
     for (auto& [so_path, handle] : plugin_map_) {
         if (!handle) continue; // 跳过无效 handle
         SafeCallSimple_(handle, so_path, "updateSo");
