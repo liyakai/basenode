@@ -3,14 +3,12 @@
 #include "utils/basenode_def_internal.h"
 #include "tools/ringbuffer.h"
 #include "tools/function_traits.h"
-#include "coro_rpc/coro_rpc_server.h"
-#include "coro_rpc/coro_rpc_client.h"
+#include "coro_rpc/coro_rpc_server.h" // IWYU pragma: keep
+#include "coro_rpc/coro_rpc_client.h" // IWYU pragma: keep
 #include "module_router.h"
 #include <cstdint>
 #include <string>
 #include <string_view>
-#include <typeinfo>
-#include <type_traits>
 
 // 前向声明
 namespace BaseNode {
@@ -87,7 +85,7 @@ public:
      * @return 返回协程Task，包含RPC调用结果
      */
     template <auto func, typename... Args>
-    auto CallModuleService(Args &&...args) -> ToolBox::coro::Task<ToolBox::CoroRpc::async_rpc_result_value_t<typename ToolBox::FunctionTraits<decltype(func)>::return_type>, ToolBox::coro::SharedLooperExecutor> {
+    auto CallModuleService(Args &&...args) -> ToolBox::coro::Task<ToolBox::CoroRpc::async_rpc_result_value_t<ToolBox::CoroRpc::rpc_async_return_value_t<typename ToolBox::FunctionTraits<decltype(func)>::return_type>>, ToolBox::coro::SharedLooperExecutor> {
         return rpc_client_.template Call<func>(std::forward<Args>(args)...);
     }
 

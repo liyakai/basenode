@@ -114,7 +114,7 @@ ErrorCode ModuleRouter::UnregisterModule(IModule* module)
 
 IModule* ModuleRouter::FindModuleByServiceId(uint32_t service_id) const
 {
-    BaseNodeLogDebug("[ModuleRouter] FindModuleByServiceId: this=%p, service_id=%u, service_id_to_module_ size=%zu", 
+    BaseNodeLogTrace("[ModuleRouter] FindModuleByServiceId: this=%p, service_id=%u, service_id_to_module_ size=%zu", 
         this, service_id, service_id_to_module_.size());
     auto it = service_id_to_module_.find(service_id);
     if (it != service_id_to_module_.end()) {
@@ -210,7 +210,7 @@ ErrorCode ModuleRouter::RouteRpcData_(std::string &&rpc_data, ModuleEvent::Event
         return err;
     }
 
-    BaseNodeLogDebug("[ModuleRouter] RouteRpcData(type:%d): routed module_service_id %u to module_id %u", 
+    BaseNodeLogTrace("[ModuleRouter] RouteRpcData(type:%d): routed module_service_id %u to module_id %u", 
                     event_type, module_service_id, module->GetModuleId());
 
     return ErrorCode::BN_SUCCESS;
