@@ -88,6 +88,18 @@ public:
     auto CallModuleService(Args &&...args) -> ToolBox::coro::Task<ToolBox::CoroRpc::async_rpc_result_value_t<ToolBox::CoroRpc::rpc_async_return_value_t<typename ToolBox::FunctionTraits<decltype(func)>::return_type>>, ToolBox::coro::SharedLooperExecutor> {
         return rpc_client_.template Call<func>(std::forward<Args>(args)...);
     }
+    
+    /**
+     * @brief 调用流式RPC服务（使用默认30秒超时）
+     * @tparam func RPC函数指针（必须返回StreamGenerator类型）
+     * @tparam Args 参数类型
+     * @param args RPC函数参数
+     * @return 返回协程Task，包含StreamReader用于接收流式数据
+     */
+    template <auto func, typename... Args>
+    auto CallModuleServiceStream(Args &&...args) -> ToolBox::coro::Task<std::shared_ptr<ToolBox::CoroRpc::StreamReader<std::string>>, ToolBox::coro::SharedLooperExecutor> {
+        return rpc_client_.template CallStream<func>(std::forward<Args>(args)...);
+    }
 
     /**
      * @brief 设置RPC请求的附件数据
