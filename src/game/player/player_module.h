@@ -16,6 +16,8 @@ public:
     ToolBox::coro::Task<std::monostate> OnLoginCoroutine(uint64_t player_id);
     // 使用协程方式直接调用 Guild::OnPlayerLoginCoro 的示例
     ToolBox::coro::Task<std::monostate> OnLoginCoroutineWithGuildCoro(uint64_t player_id);
+    // 使用流式RPC获取公会成员列表的示例
+    ToolBox::coro::Task<std::monostate> FetchGuildMembers(uint64_t guild_id);
     
 protected:
     virtual ErrorCode DoInit() override;
