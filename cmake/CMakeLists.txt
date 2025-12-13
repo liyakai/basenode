@@ -37,10 +37,11 @@ ADD_CORE_LIBRARY(basenode_core
 # ============================================================================
 # 创建模块共享库
 # 所有模块都链接 basenode_core，共享同一个 ModuleRouter 实例
+# 使用 PROTOBUF 参数自动链接 protobuf 库
 # ============================================================================
 ADD_SHARED_LIBRARY_FROM_DIR(gatenode ${SRC_PATH}/framework/gatenode)
-ADD_SHARED_LIBRARY_FROM_DIR(player_module ${SRC_PATH}/game/player)
-ADD_SHARED_LIBRARY_FROM_DIR(guild_module ${SRC_PATH}/game/guild)
+ADD_SHARED_LIBRARY_FROM_DIR(player_module ${SRC_PATH}/game/player PROTOBUF)
+ADD_SHARED_LIBRARY_FROM_DIR(guild_module ${SRC_PATH}/game/guild PROTOBUF)
 ADD_SHARED_LIBRARY_FROM_DIR(network ${SRC_PATH}/core/net)
 
 # Network 模块需要特殊链接选项

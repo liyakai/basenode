@@ -98,6 +98,7 @@ function(CONFIGURE_MODULE_LIBRARY target_name source_dir)
         ${ROOT_PATH}/3rdparty/toolbox/include
         ${SRC_CORE_PATH}
         ${SRC_CORE_PATH}/module
+        ${SRC_CORE_PATH}/protobuf/pb_out
     )
     # 链接 basenode_core 库，以访问 ModuleRouter
     target_link_libraries(${target_name} PRIVATE basenode_core)
@@ -126,18 +127,150 @@ function(CONFIGURE_MODULE_LIBRARY target_name source_dir)
     endif()
 endfunction()
 
+# 查找 protobuf 库
+# 参数:
+#   PROTOBUF_LIB_VAR - 输出变量名，用于存储 protobuf 库的完整路径或库名
+#   PROTOBUF_INCLUDE_DIR_VAR - 输出变量名，用于存储 protobuf 头文件目录
+function(FIND_PROTOBUF_LIBRARY PROTOBUF_LIB_VAR PROTOBUF_INCLUDE_DIR_VAR)
+    # 缓存变量，避免重复查找
+    if(DEFINED _CACHED_PROTOBUF_LIB AND DEFINED _CACHED_PROTOBUF_INCLUDE)
+        set(${PROTOBUF_LIB_VAR} ${_CACHED_PROTOBUF_LIB} PARENT_SCOPE)
+        set(${PROTOBUF_INCLUDE_DIR_VAR} ${_CACHED_PROTOBUF_INCLUDE} PARENT_SCOPE)
+        return()
+    endif()
+    
+    # 首先尝试在第三方目录中查找
+    set(PROTOBUF_ROOT ${ROOT_PATH}/3rdparty/toolbox/3rdparty/protobuf_3.21.11)
+    set(PROTOBUF_LIB_PATH "${PROTOBUF_ROOT}/lib/libprotobuf.a")
+    
+    if(EXISTS ${PROTOBUF_LIB_PATH} AND EXISTS "${PROTOBUF_ROOT}/include")
+        set(${PROTOBUF_LIB_VAR} ${PROTOBUF_LIB_PATH} PARENT_SCOPE)
+        set(${PROTOBUF_INCLUDE_DIR_VAR} "${PROTOBUF_ROOT}/include" PARENT_SCOPE)
+        set(_CACHED_PROTOBUF_LIB ${PROTOBUF_LIB_PATH} CACHE INTERNAL "Cached protobuf library path")
+        set(_CACHED_PROTOBUF_INCLUDE "${PROTOBUF_ROOT}/include" CACHE INTERNAL "Cached protobuf include path")
+        message(STATUS "Found protobuf library: ${PROTOBUF_LIB_PATH}")
+        return()
+    endif()
+    
+    # 如果第三方目录中不存在，尝试使用 find_library 查找系统安装的版本
+    # 使用 NO_DEFAULT_PATH 避免在系统路径中查找，优先使用第三方版本
+    find_library(PROTOBUF_LIB_FOUND 
+        NAMES protobuf libprotobuf
+        PATHS 
+            /usr/lib
+            /usr/local/lib
+            /usr/lib64
+            /usr/local/lib64
+        NO_DEFAULT_PATH
+    )
+    
+    # 如果上面没找到，再在默认路径中查找
+    if(NOT PROTOBUF_LIB_FOUND)
+        find_library(PROTOBUF_LIB_FOUND NAMES protobuf libprotobuf)
+    endif()
+    
+    find_path(PROTOBUF_INCLUDE_FOUND
+        NAMES google/protobuf/message.h
+        PATHS
+            /usr/include
+            /usr/local/include
+        NO_DEFAULT_PATH
+    )
+    
+    if(NOT PROTOBUF_INCLUDE_FOUND)
+        find_path(PROTOBUF_INCLUDE_FOUND NAMES google/protobuf/message.h)
+    endif()
+    
+    if(PROTOBUF_LIB_FOUND AND PROTOBUF_INCLUDE_FOUND)
+        set(${PROTOBUF_LIB_VAR} ${PROTOBUF_LIB_FOUND} PARENT_SCOPE)
+        set(${PROTOBUF_INCLUDE_DIR_VAR} ${PROTOBUF_INCLUDE_FOUND} PARENT_SCOPE)
+        set(_CACHED_PROTOBUF_LIB ${PROTOBUF_LIB_FOUND} CACHE INTERNAL "Cached protobuf library path")
+        set(_CACHED_PROTOBUF_INCLUDE ${PROTOBUF_INCLUDE_FOUND} CACHE INTERNAL "Cached protobuf include path")
+        message(STATUS "Found system protobuf library: ${PROTOBUF_LIB_FOUND}")
+        return()
+    endif()
+    
+    # 如果都找不到，使用库名（让链接器在运行时查找）
+    set(${PROTOBUF_LIB_VAR} "protobuf" PARENT_SCOPE)
+    set(${PROTOBUF_INCLUDE_DIR_VAR} "" PARENT_SCOPE)
+    set(_CACHED_PROTOBUF_LIB "protobuf" CACHE INTERNAL "Cached protobuf library name")
+    set(_CACHED_PROTOBUF_INCLUDE "" CACHE INTERNAL "Cached protobuf include (empty)")
+    message(WARNING "Protobuf library not found, will use -lprotobuf at link time")
+endfunction()
+
+# 创建并配置 protobuf 库（如果尚未创建）
+# 返回: protobuf 库的目标名称
+function(ENSURE_PROTOBUF_LIBRARY)
+    # 如果已经创建过，直接返回
+    if(TARGET basenode_protobuf)
+        return()
+    endif()
+    
+    # 自动查找所有 .pb.cc 文件
+    file(GLOB PROTOBUF_SRCS "${SRC_CORE_PATH}/protobuf/pb_out/*.pb.cc")
+    
+    if(NOT PROTOBUF_SRCS)
+        message(WARNING "No protobuf source files found in ${SRC_CORE_PATH}/protobuf/pb_out/")
+        return()
+    endif()
+    
+    # 创建 protobuf 静态库
+    add_library(basenode_protobuf STATIC ${PROTOBUF_SRCS})
+    
+    # 启用位置无关代码（PIC），因为静态库会被链接到共享库中
+    set_target_properties(basenode_protobuf PROPERTIES
+        POSITION_INDEPENDENT_CODE ON
+    )
+    
+    # 查找 protobuf 库
+    FIND_PROTOBUF_LIBRARY(PROTOBUF_LIB_PATH PROTOBUF_INCLUDE_DIR_PATH)
+    
+    # 配置包含目录
+    set(INCLUDE_DIRS
+        ${SRC_CORE_PATH}/protobuf/pb_out
+        ${ROOT_PATH}/3rdparty/toolbox/include
+    )
+    
+    # 添加 protobuf 包含目录
+    if(NOT "${PROTOBUF_INCLUDE_DIR_PATH}" STREQUAL "")
+        list(APPEND INCLUDE_DIRS ${PROTOBUF_INCLUDE_DIR_PATH})
+    else()
+        # 如果找不到，尝试使用第三方目录
+        set(PROTOBUF_ROOT ${ROOT_PATH}/3rdparty/toolbox/3rdparty/protobuf_3.21.11)
+        if(EXISTS "${PROTOBUF_ROOT}/include")
+            list(APPEND INCLUDE_DIRS "${PROTOBUF_ROOT}/include")
+        endif()
+    endif()
+    
+    target_include_directories(basenode_protobuf PUBLIC ${INCLUDE_DIRS})
+    
+    # 链接 protobuf 库
+    target_link_libraries(basenode_protobuf PUBLIC ${PROTOBUF_LIB_PATH})
+    
+    # 设置输出目录
+    set_target_properties(basenode_protobuf PROPERTIES
+        ARCHIVE_OUTPUT_DIRECTORY ${ROOT_PATH}/lib
+    )
+    
+    message(STATUS "Created protobuf library with sources: ${PROTOBUF_SRCS}")
+endfunction()
+
 # 从指定目录生成共享库
 # 参数:
 #   name - 库名称（也是输出文件名）
 #   source_dir - 源文件目录路径
-#   output_dir - 输出目录（可选，默认为 ${PROJECT_SOURCE_DIR}/lib）
+#   [PROTOBUF] - 可选参数，如果提供则自动链接 protobuf 库
+# 示例:
+#   ADD_SHARED_LIBRARY_FROM_DIR(player_module ${SRC_PATH}/game/player)
+#   ADD_SHARED_LIBRARY_FROM_DIR(player_module ${SRC_PATH}/game/player PROTOBUF)
 function(ADD_SHARED_LIBRARY_FROM_DIR name source_dir)
-    # 处理可选参数：输出目录
-    if(ARGC GREATER 2)
-        set(output_dir ${ARGV2})
-    else()
-        set(output_dir ${ROOT_PATH}/lib)
-    endif()
+    # 检查是否有 PROTOBUF 参数
+    set(need_protobuf FALSE)
+    foreach(arg ${ARGN})
+        if(arg STREQUAL "PROTOBUF")
+            set(need_protobuf TRUE)
+        endif()
+    endforeach()
 
     # 收集源文件
     AUX_SOURCE_DIRECTORY(${source_dir} ${name}_SRCS)
@@ -147,11 +280,21 @@ function(ADD_SHARED_LIBRARY_FROM_DIR name source_dir)
     list(FILTER ${name}_TMP_MODULE_SRCS EXCLUDE REGEX ".*module_interface\\.cpp$")
     list(APPEND ${name}_SRCS ${${name}_TMP_MODULE_SRCS})
     Message(STATUS "${name}_SRCS -> ${${name}_SRCS}")
+    
     # 创建共享库
     ADD_LIBRARY(${name} SHARED ${${name}_SRCS})
     
     # 配置模块库属性
     CONFIGURE_MODULE_LIBRARY(${name} ${source_dir})
+    
+    # 如果需要 protobuf，确保 protobuf 库存在并链接
+    if(need_protobuf)
+        ENSURE_PROTOBUF_LIBRARY()
+        if(TARGET basenode_protobuf)
+            target_link_libraries(${name} PRIVATE basenode_protobuf)
+            message(STATUS "Linked protobuf library to ${name}")
+        endif()
+    endif()
 endfunction()
 
 

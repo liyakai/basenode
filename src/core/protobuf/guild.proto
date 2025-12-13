@@ -1,0 +1,28 @@
+syntax = "proto3";
+
+package guild;
+
+// 指定生成的 Go 代码的包名
+option go_package = "proto/guild";
+
+// 用户信息
+message Guild {
+  uint64 id = 1;
+  string name = 2;
+  
+  // 时间戳
+  int64 created_at = 7;
+  bool is_active = 8;
+}
+
+// 请求消息
+message GetGuildInfoRequest {
+  uint64 guild_id = 1;
+}
+
+// 响应消息
+message GetGuildInfoResponse {
+  Guild guild = 1;
+  int32 ret = 2;
+}
+

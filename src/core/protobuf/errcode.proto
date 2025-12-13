@@ -1,0 +1,55 @@
+syntax = "proto3";
+
+package errcode;
+
+// 指定生成的 Go 代码的包名
+option go_package = "proto/errcode";
+
+// 全服错误码定义
+// 错误码范围说明：
+//   0-9999: 系统级错误码（保留）
+//   10000-19999: 通用业务错误码
+//   20000-29999: 玩家相关错误码
+//   30000-39999: 公会相关错误码
+//   40000-49999: 其他业务模块错误码
+enum ErrCode {
+    // 成功（系统级，保留）
+    ERR_SUCCESS = 0;
+    
+    // ========== 通用业务错误码 (10000-19999) ==========
+    ERR_INVALID_ARGUMENT = 10000;      // 无效参数
+    ERR_INTERNAL_ERROR = 10001;        // 内部错误
+    ERR_NOT_FOUND = 10002;             // 资源未找到
+    ERR_ALREADY_EXISTS = 10003;        // 资源已存在
+    ERR_PERMISSION_DENIED = 10004;     // 权限不足
+    ERR_OPERATION_FAILED = 10005;      // 操作失败
+    ERR_TIMEOUT = 10006;               // 超时
+    ERR_DATABASE_ERROR = 10007;        // 数据库错误
+    ERR_CACHE_ERROR = 10008;           // 缓存错误
+    ERR_SERIALIZE_ERROR = 10009;       // 序列化错误
+    ERR_DESERIALIZE_ERROR = 10010;     // 反序列化错误
+    
+    // ========== 玩家相关错误码 (20000-29999) ==========
+    ERR_PLAYER_NOT_FOUND = 20000;      // 玩家不存在
+    ERR_PLAYER_ALREADY_EXISTS = 20001; // 玩家已存在
+    ERR_PLAYER_OFFLINE = 20002;        // 玩家离线
+    ERR_PLAYER_LEVEL_NOT_ENOUGH = 20003; // 玩家等级不足
+    ERR_PLAYER_GOLD_NOT_ENOUGH = 20004;  // 金币不足
+    ERR_PLAYER_DIAMOND_NOT_ENOUGH = 20005; // 钻石不足
+    
+    // ========== 公会相关错误码 (30000-39999) ==========
+    ERR_GUILD_NOT_FOUND = 30000;       // 公会不存在
+    ERR_GUILD_ALREADY_EXISTS = 30001;  // 公会已存在
+    ERR_GUILD_INVALID_ID = 30002;      // 无效的公会ID
+    ERR_GUILD_NAME_TOO_LONG = 30003;   // 公会名称过长
+    ERR_GUILD_NAME_EMPTY = 30004;       // 公会名称为空
+    ERR_GUILD_MEMBER_FULL = 30005;     // 公会成员已满
+    ERR_GUILD_NOT_MEMBER = 30006;      // 不是公会成员
+    ERR_GUILD_ALREADY_MEMBER = 30007;  // 已是公会成员
+    ERR_GUILD_PERMISSION_DENIED = 30008; // 公会权限不足
+    ERR_GUILD_LEADER_CANNOT_LEAVE = 30009; // 会长不能离开公会
+    ERR_GUILD_LEVEL_NOT_ENOUGH = 30010;    // 公会等级不足
+    
+    // ========== 其他业务模块错误码 (40000-49999) ==========
+    // 预留给其他业务模块使用
+}
