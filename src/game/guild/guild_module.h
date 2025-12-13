@@ -25,6 +25,10 @@ public:
     // 返回: StreamGenerator<std::string> - 每个字符串包含一批成员信息
     ToolBox::CoroRpc::StreamGenerator<std::string> GetGuildMembersStream(uint64_t guild_id);
     
+    // 流式RPC服务：获取公会成员ID列表（返回数值类型）
+    // 返回: StreamGenerator<uint64_t> - 每个值是一个成员ID
+    ToolBox::CoroRpc::StreamGenerator<uint64_t> GetGuildMemberIdsStream(uint64_t guild_id);
+    
 protected:
     virtual ErrorCode DoInit() override;
     virtual ErrorCode DoUpdate() override;

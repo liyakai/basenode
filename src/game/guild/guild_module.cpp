@@ -10,8 +10,8 @@ ErrorCode Guild::DoInit()
     BaseNodeLogInfo("GuildModule Init");
     // 注册RPC服务函数（直接使用成员函数指针）
     // 同时注册普通版本和协程版本的 OnPlayerLogin
-    // 注册流式RPC服务：GetGuildMembersStream
-    RegisterService<&Guild::OnPlayerLogin, &Guild::OnPlayerLoginCoro, &Guild::GetGuildMembersStream>(this);
+    // 注册流式RPC服务：GetGuildMembersStream 和 GetGuildMemberIdsStream
+    RegisterService<&Guild::OnPlayerLogin, &Guild::OnPlayerLoginCoro, &Guild::GetGuildMembersStream, &Guild::GetGuildMemberIdsStream>(this);
     return ErrorCode::BN_SUCCESS;
 }
 
@@ -78,6 +78,32 @@ ToolBox::CoroRpc::StreamGenerator<std::string> Guild::GetGuildMembersStream(uint
     }
     
     BaseNodeLogInfo("GuildModule GetGuildMembersStream: completed, guild_id: %llu", guild_id);
+}
+
+// 流式RPC服务实现：返回公会成员ID列表（数值类型）
+ToolBox::CoroRpc::StreamGenerator<uint64_t> Guild::GetGuildMemberIdsStream(uint64_t guild_id)
+{
+    BaseNodeLogInfo("GuildModule GetGuildMemberIdsStream: guild_id: %llu", guild_id);
+    
+    // 模拟公会成员ID数据（实际应该从数据库或缓存中获取）
+    // 假设有50个成员，逐个返回成员ID
+    constexpr int kTotalMembers = 50;
+    
+    for (int i = 0; i < kTotalMembers; ++i) {
+        // 生成成员ID（实际应该从数据库查询）
+        uint64_t member_id = guild_id * 10000 + (i + 1);
+        
+        BaseNodeLogInfo("GuildModule GetGuildMemberIdsStream: yielding member_id: %llu", member_id);
+        
+        // 使用 co_yield 返回成员ID（数值类型）
+        co_yield member_id;
+        
+        // 模拟处理延迟（实际场景中可能是数据库查询或其他IO操作）
+        // 这里可以 co_await 其他异步操作
+    }
+    
+    BaseNodeLogInfo("GuildModule GetGuildMemberIdsStream: completed, guild_id: %llu, total members: %d", 
+                   guild_id, kTotalMembers);
 }
 
 extern "C" SO_EXPORT_SYMBOL void SO_EXPORT_FUNC_INIT() {
