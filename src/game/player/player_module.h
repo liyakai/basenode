@@ -22,6 +22,10 @@ public:
     ToolBox::coro::Task<std::monostate> FetchGuildMemberIds(uint64_t guild_id);
     // 使用基于 PB 的 RPC 获取公会信息的示例
     ToolBox::coro::Task<std::monostate> GetGuildInfoByPB(uint64_t guild_id);
+    // 使用基于 PB 的协程 RPC 获取公会信息的示例
+    ToolBox::coro::Task<std::monostate> GetGuildInfoByPBCoro(uint64_t guild_id);
+    // 使用基于 PB 的流式 RPC 获取公会成员列表的示例
+    ToolBox::coro::Task<std::monostate> FetchGuildMembersByPB(uint64_t guild_id);
     
 protected:
     virtual ErrorCode DoInit() override;

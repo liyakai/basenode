@@ -15,6 +15,8 @@ class StreamGenerator;
 namespace guild {
 class GetGuildInfoRequest;
 class GetGuildInfoResponse;
+class GetGuildMembersStreamRequest;
+class GetGuildMembersStreamResponse;
 }
 
 namespace BaseNode
@@ -39,6 +41,17 @@ public:
     // 接收: guild::GetGuildInfoRequest - 包含 guild_id
     // 返回: guild::GetGuildInfoResponse - 包含公会信息和返回码
     guild::GetGuildInfoResponse GetGuildInfo(const guild::GetGuildInfoRequest& request);
+    
+    // 基于 PB 的协程 RPC 服务：获取公会信息（协程版本）
+    // 接收: guild::GetGuildInfoRequest - 包含 guild_id
+    // 返回: Task<guild::GetGuildInfoResponse> - 包含公会信息和返回码
+    ToolBox::coro::Task<guild::GetGuildInfoResponse> GetGuildInfoCoro(const guild::GetGuildInfoRequest& request);
+    
+    // 基于 PB 的流式 RPC 服务：获取公会成员列表（分批返回 PB 消息）
+    // 接收: guild::GetGuildMembersStreamRequest - 包含 guild_id
+    // 返回: StreamGenerator<guild::GetGuildMembersStreamResponse> - 每个消息包含一批成员信息
+    ToolBox::CoroRpc::StreamGenerator<guild::GetGuildMembersStreamResponse> GetGuildMembersStreamPB(const guild::GetGuildMembersStreamRequest& request);
+    
     
 protected:
     virtual ErrorCode DoInit() override;

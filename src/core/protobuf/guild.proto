@@ -26,3 +26,14 @@ message GetGuildInfoResponse {
   int32 ret = 2;
 }
 
+// 流式 RPC 请求：获取公会成员列表
+message GetGuildMembersStreamRequest {
+  uint64 guild_id = 1;
+}
+
+// 流式 RPC 响应：公会成员信息（每个消息包含一批成员）
+message GetGuildMembersStreamResponse {
+  repeated Guild members = 1;  // 一批成员信息
+  int32 ret = 2;  // 返回码（最后一个消息时使用）
+}
+
