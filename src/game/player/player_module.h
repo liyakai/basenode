@@ -27,10 +27,17 @@ public:
     // 使用基于 PB 的流式 RPC 获取公会成员列表的示例
     ToolBox::coro::Task<std::monostate> FetchGuildMembersByPB(uint64_t guild_id);
     
+    // 使用 Zookeeper 服务发现 + RequestContext 选择 Guild 实例，再调用 PB RPC 的示例
+    ToolBox::coro::Task<std::monostate> GetGuildInfoByServiceDiscovery(uint64_t guild_id);
+    
 protected:
     virtual ErrorCode DoInit() override;
     virtual ErrorCode DoUpdate() override;
     virtual ErrorCode DoUninit() override;
+
+private:
+    // 示例：如果你后续希望缓存 Invoker，可以在这里存一份
+    // BaseNode::ServiceDiscovery::IInvokerPtr guild_info_invoker_;
 };
 
 #define PlayerMgr ToolBox::Singleton<Player>::Instance()

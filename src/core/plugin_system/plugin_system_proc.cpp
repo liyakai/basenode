@@ -1,6 +1,7 @@
 #include "plugin_system_proc.h"
 #include "utils/basenode_def_internal.h"
 #include "tools/safe_call.h"
+#include "module/module_router.h"
 #include <string>
 #include <vector>
 #include <filesystem>
@@ -20,8 +21,9 @@ int PluginLoadManager::Init()
     
     // 定义需要加载的模块列表（按加载顺序）
     std::vector<std::string> modules = {
-        "libbasenode_core.so",  // 核心库必须最先加载，确保 ModuleRouter 符号在全局符号表中
+        "libbasenode_core.so",      // 核心库必须最先加载，确保 ModuleRouter 符号在全局符号表中
         "libgatenode.so",
+        "libservice_discovery.so",   // 服务发现模块需要在业务模块之前加载
         "libplayer_module.so",
         "libguild_module.so",
         "libnetwork.so"
@@ -35,7 +37,9 @@ int PluginLoadManager::Init()
             return -1;
         }
     }
-    
+
+    AfterAllModulesInit_();
+
     return 0;
 }
 
@@ -67,6 +71,22 @@ int PluginLoadManager::LoadPluginSo_(const std::string& so_path)
     }
     plugin_map_[so_path] = handle;
     SafeCallSimple_(handle, so_path, "initSo");
+    return 0;
+}
+
+int PluginLoadManager::AfterAllModulesInit_()
+{
+    BaseNodeLogInfo("[PluginLoadManager] AfterAllModulesInit_: calling all modules' AfterAllModulesInit via ModuleRouter");
+    
+    // 利用 ModuleRouter 中已注册的模块，直接调用它们的 AfterAllModulesInit
+    // 这样不需要每个 so 都实现 afterAllModulesInitSo 导出接口
+    ErrorCode err = ModuleRouterMgr->CallAllModulesAfterInit();
+    if (err != ErrorCode::BN_SUCCESS) {
+        BaseNodeLogError("[PluginLoadManager] AfterAllModulesInit_: CallAllModulesAfterInit failed, error: %d", static_cast<int>(err));
+        return -1;
+    }
+    
+    BaseNodeLogInfo("[PluginLoadManager] AfterAllModulesInit_: completed successfully");
     return 0;
 }
 

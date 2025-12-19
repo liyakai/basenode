@@ -41,6 +41,10 @@ namespace BaseNode
         return ErrorCode::BN_SUCCESS;
     }
 
+    ErrorCode IModule::AfterAllModulesInit() {
+        return DoAfterAllModulesInit();
+    }
+
     ErrorCode IModule::PushModuleEvent(ModuleEvent&& module_event)
     {
         if (recv_ring_buffer_.Full()) {

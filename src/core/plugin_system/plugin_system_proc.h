@@ -23,6 +23,7 @@ public:
 
 private:
     int LoadPluginSo_(const std::string& so_path);
+    int AfterAllModulesInit_();
 
     LibHandle LoadDynamicLibrary_(const std::string& so_path);
     void* GetSymbolAddress_(LibHandle handle, const std::string& symbol_name);

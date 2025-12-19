@@ -3,6 +3,8 @@
 #include "coro_rpc/impl/protocol/struct_pack_protocol.h"
 #include "protobuf/pb_out/guild.pb.h"
 #include "protobuf/pb_out/errcode.pb.h"
+#include "service_discovery/service_discovery_core.h"
+#include "service_discovery/zookeeper/zk_service_discovery_module.h"
 #include <exception>
 
 namespace BaseNode
@@ -52,7 +54,6 @@ ErrorCode Player::OnLogin(uint64_t player_id)
         BaseNodeLogInfo("PlayerModule OnLogin: FetchGuildMemberIds completed");
     });
     // 使用基于 PB 的 RPC 获取公会信息（示例：使用玩家所属的公会ID）
-    // TODO: 实际应该从玩家数据中获取公会ID，这里使用示例值
     constexpr uint64_t kExampleGuildId = 1001;
     GetGuildInfoByPB(kExampleGuildId).then([](auto) {
         BaseNodeLogInfo("PlayerModule OnLogin: GetGuildInfoByPB completed");
@@ -64,6 +65,11 @@ ErrorCode Player::OnLogin(uint64_t player_id)
 
     FetchGuildMembersByPB(1001).then([](auto) {
         BaseNodeLogInfo("PlayerModule OnLogin: FetchGuildMembersByPB completed");
+    });
+
+    // 使用 Zookeeper 服务发现 + RequestContext 路由后再调用 PB RPC
+    GetGuildInfoByServiceDiscovery(1001).then([](auto) {
+        BaseNodeLogInfo("PlayerModule OnLogin: GetGuildInfoByServiceDiscovery completed");
     });
 
     
@@ -259,6 +265,71 @@ ToolBox::coro::Task<std::monostate> Player::GetGuildInfoByPB(uint64_t guild_id)
         }
     } catch (const std::exception& e) {
         BaseNodeLogError("PlayerModule GetGuildInfoByPB: exception occurred: %s", e.what());
+    }
+    
+    co_return std::monostate{};
+}
+
+// 使用 Zookeeper 服务发现 + RequestContext 选择 Guild 实例，再调用 PB RPC 的示例
+ToolBox::coro::Task<std::monostate> Player::GetGuildInfoByServiceDiscovery(uint64_t guild_id)
+{
+    using errcode::ErrCode;
+    using BaseNode::ServiceDiscovery::RequestContext;
+
+    BaseNodeLogInfo("PlayerModule GetGuildInfoByServiceDiscovery: guild_id: %llu", guild_id);
+
+    if (guild_id == 0)
+    {
+        BaseNodeLogError("PlayerModule GetGuildInfoByServiceDiscovery: invalid guild_id: %llu", guild_id);
+        co_return std::monostate{};
+    }
+
+    // 1. 通过 Zookeeper 服务发现选择一个 Guild 实例（支持多机房就近路由）
+    RequestContext ctx;
+    ctx.caller_zone = "sh";
+    ctx.caller_idc  = "sh01";
+    ctx.labels["guild_id"] = std::to_string(guild_id); // 示例：如果以后做一致性哈希，可以用这个
+
+    auto inst_opt = ZkServiceDiscoveryMgr->ChooseInstance("guild-service", ctx);
+    if (!inst_opt)
+    {
+        BaseNodeLogError("PlayerModule GetGuildInfoByServiceDiscovery: no guild-service instance found");
+        co_return std::monostate{};
+    }
+
+    const auto &inst = *inst_opt;
+    BaseNodeLogInfo("PlayerModule GetGuildInfoByServiceDiscovery: choose instance_id=%s host=%s port=%u zone=%s idc=%s",
+                    inst.instance_id.c_str(),
+                    inst.host.c_str(),
+                    inst.port,
+                    inst.metadata.count("zone") ? inst.metadata.at("zone").c_str() : "",
+                    inst.metadata.count("idc") ? inst.metadata.at("idc").c_str() : "");
+
+    // 2. 目前仍然通过模块内 RPC 调用 Guild（同进程），后续可以根据 inst.host/port 做跨进程路由
+    try
+    {
+        guild::GetGuildInfoRequest request;
+        request.set_guild_id(guild_id);
+
+        auto result = co_await CallModuleService<&Guild::GetGuildInfo>(request);
+        const guild::GetGuildInfoResponse &response = *result;
+
+        int32_t ret_code = response.ret();
+        ErrCode err_code = static_cast<ErrCode>(ret_code);
+        if (err_code == ErrCode::ERR_SUCCESS && response.has_guild())
+        {
+            const guild::Guild &guild = response.guild();
+            BaseNodeLogInfo("PlayerModule GetGuildInfoByServiceDiscovery: success via ZK, guild_id=%llu, guild_name=%s",
+                            guild.id(), guild.name().c_str());
+        }
+        else
+        {
+            BaseNodeLogError("PlayerModule GetGuildInfoByServiceDiscovery: failed via ZK, ret=%d", ret_code);
+        }
+    }
+    catch (const std::exception &e)
+    {
+        BaseNodeLogError("PlayerModule GetGuildInfoByServiceDiscovery: exception: %s", e.what());
     }
     
     co_return std::monostate{};

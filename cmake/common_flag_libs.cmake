@@ -1,4 +1,6 @@
-
+# ============================================================================
+# basenode CMake 公共配置和函数库
+# ============================================================================
 
 # 规范化路径，解析 .. 和符号链接（输入输出为同一变量）
 function(NORMALIZE_PATH path_var)
@@ -6,16 +8,19 @@ function(NORMALIZE_PATH path_var)
     set(${path_var} ${normalized_path} PARENT_SCOPE)
 endfunction()
 
-# common flags for cmake==================================
+# ============================================================================
+# 路径配置
+# ============================================================================
 set(ROOT_PATH ${PROJECT_SOURCE_DIR}/..)
 NORMALIZE_PATH(ROOT_PATH)
 set(SRC_PATH ${ROOT_PATH}/src)
 set(SRC_CORE_PATH ${SRC_PATH}/core)
 
 
+# ============================================================================
+# 编译选项配置
+# ============================================================================
 set(CMAKE_CXX_STANDARD 20)
-set(CMAKE_C_COMPILER clang)
-set(CMAKE_CXX_COMPILER clang++)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # 如果没有指定构建类型，默认为 Debug（便于调试）
@@ -23,24 +28,68 @@ if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Debug CACHE STRING "Build type" FORCE)
 endif()
 
+# ============================================================================
+# 第三方库配置
+# ============================================================================
+# 添加 toolbox 第三方库
+function(ADD_TOOLBOX_LIBRARY)
+    if(NOT TARGET toolbox)
+        set(toolbox_dir ${ROOT_PATH}/3rdparty/toolbox)
+        add_subdirectory(${toolbox_dir} ${CMAKE_BINARY_DIR}/toolbox_build EXCLUDE_FROM_ALL)
+    endif()
+endfunction()
 
+# ============================================================================
+# CMake 公共函数
+# ============================================================================
 
+# 设置目标的输出目录（库和可执行文件）
+function(SET_TARGET_OUTPUT_DIR target_name output_dir)
+    set_target_properties(${target_name} PROPERTIES
+        ARCHIVE_OUTPUT_DIRECTORY ${output_dir}
+        LIBRARY_OUTPUT_DIRECTORY ${output_dir}
+        RUNTIME_OUTPUT_DIRECTORY ${output_dir}
+    )
+    add_custom_command(TARGET ${target_name} PRE_BUILD
+        COMMAND ${CMAKE_COMMAND} -E make_directory ${output_dir}
+    )
+endfunction()
 
-# cmake 公共函数==================================
+# 设置目标的编译选项（通用部分）
+function(SET_TARGET_COMPILE_OPTIONS target_name export_symbols)
+    if(export_symbols)
+        target_compile_options(${target_name} PRIVATE 
+            -fvisibility=default
+            -fmacro-prefix-map=${ROOT_PATH}/=
+        )
+        target_link_options(${target_name} PRIVATE -rdynamic)
+    else()
+        target_compile_options(${target_name} PRIVATE 
+            -fvisibility=hidden
+            -fvisibility-inlines-hidden
+            -fmacro-prefix-map=${ROOT_PATH}/=
+        )
+    endif()
+    
+    if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+        target_compile_options(${target_name} PRIVATE -g3 -O0)
+    endif()
+endfunction()
 
 # 递归添加所有子目录到包含路径
 function(ADD_SUBDIRECTORIES result cur_dir)
+    set(dir_list ${cur_dir})
     file(GLOB children RELATIVE ${cur_dir} ${cur_dir}/*)
-    set(tmp_dirlist "")
-    list(APPEND ${result} ${cur_dir})
     foreach(child ${children})
-        if(IS_DIRECTORY ${cur_dir}/${child})
-            list(APPEND tmp_dirlist ${cur_dir}/${child})
-            # 递归调用以找到所有子目录
-            ADD_SUBDIRECTORIES(${result} ${cur_dir}/${child})
+        set(child_path ${cur_dir}/${child})
+        if(IS_DIRECTORY ${child_path})
+            list(APPEND dir_list ${child_path})
+            # 递归处理子目录
+            ADD_SUBDIRECTORIES(sub_dirs ${child_path})
+            list(APPEND dir_list ${sub_dirs})
         endif()
     endforeach()
-    set(${result} ${${result}} ${tmp_dirlist} PARENT_SCOPE)
+    set(${result} ${dir_list} PARENT_SCOPE)
 endfunction()
 
 # 配置核心共享库的通用属性（内部函数）
@@ -53,17 +102,8 @@ function(CONFIGURE_CORE_LIBRARY target_name)
         ${SRC_CORE_PATH}/module
     )
     target_link_libraries(${target_name} PUBLIC toolbox)
-    set_target_properties(${target_name} PROPERTIES
-        ARCHIVE_OUTPUT_DIRECTORY ${ROOT_PATH}/lib
-        LIBRARY_OUTPUT_DIRECTORY ${ROOT_PATH}/lib
-        RUNTIME_OUTPUT_DIRECTORY ${ROOT_PATH}/lib
-    )
-    # 导出所有符号，让其他共享库可以访问
-    target_compile_options(${target_name} PRIVATE -fvisibility=default)
-    target_link_options(${target_name} PRIVATE -rdynamic)
-    add_custom_command(TARGET ${target_name} PRE_BUILD
-        COMMAND ${CMAKE_COMMAND} -E make_directory ${ROOT_PATH}/lib
-    )
+    SET_TARGET_OUTPUT_DIR(${target_name} ${ROOT_PATH}/lib)
+    SET_TARGET_COMPILE_OPTIONS(${target_name} TRUE)
 endfunction()
 
 # 创建并配置核心共享库
@@ -84,14 +124,25 @@ function(ADD_CORE_LIBRARY name)
     
     # 配置核心库属性
     CONFIGURE_CORE_LIBRARY(${name})
+    
+    # 确保 toolbox 在 basenode_core 之前构建（即使使用了 EXCLUDE_FROM_ALL）
+    if(TARGET toolbox)
+        add_dependencies(${name} toolbox)
+    endif()
 endfunction()
 
 # 配置模块共享库的通用属性
 # 参数:
 #   target_name - 目标名称
 #   source_dir - 源文件目录路径
+#   export_symbols - 可选，如果为 TRUE 则导出所有符号（用于基础库）
 function(CONFIGURE_MODULE_LIBRARY target_name source_dir)
-    # 设置头文件搜索路径
+    if(ARGC GREATER 2)
+        set(should_export_symbols ${ARGV2})
+    else()
+        set(should_export_symbols FALSE)
+    endif()
+    
     target_include_directories(${target_name} PRIVATE
         ${source_dir}
         ${source_dir}/..
@@ -100,30 +151,12 @@ function(CONFIGURE_MODULE_LIBRARY target_name source_dir)
         ${SRC_CORE_PATH}/module
         ${SRC_CORE_PATH}/protobuf/pb_out
     )
-    # 链接 basenode_core 库，以访问 ModuleRouter
     target_link_libraries(${target_name} PRIVATE basenode_core)
-    # 设置所有构建类型的输出路径
-    set_target_properties(${target_name} PROPERTIES
-        ARCHIVE_OUTPUT_DIRECTORY ${ROOT_PATH}/lib
-        LIBRARY_OUTPUT_DIRECTORY ${ROOT_PATH}/lib
-        RUNTIME_OUTPUT_DIRECTORY ${ROOT_PATH}/lib
-    )
-    # 确保目标目录存在
-    add_custom_command(TARGET ${target_name} PRE_BUILD
-        COMMAND ${CMAKE_COMMAND} -E make_directory ${ROOT_PATH}/lib
-    )
-    # 设置编译选项
-    target_compile_options(${target_name} PRIVATE 
-        -fvisibility=hidden             # 隐藏所有符号
-        -fvisibility-inlines-hidden     # 隐藏内联函数符号
-        -fmacro-prefix-map=${ROOT_PATH}/=  # 设置 __FILE__ 显示相对路径
-    )
-    # 如果是 Debug 构建类型，添加调试选项
-    if(CMAKE_BUILD_TYPE STREQUAL "Debug")
-        target_compile_options(${target_name} PRIVATE 
-            -g3                              # 生成详细的调试信息（包括宏定义）
-            -O0                              # 禁用优化，确保调试时代码不被优化掉
-        )
+    SET_TARGET_OUTPUT_DIR(${target_name} ${ROOT_PATH}/lib)
+    SET_TARGET_COMPILE_OPTIONS(${target_name} ${should_export_symbols})
+    
+    if(should_export_symbols)
+        message(STATUS "Configured ${target_name} with exported symbols (base library)")
     endif()
 endfunction()
 
@@ -132,7 +165,7 @@ endfunction()
 #   PROTOBUF_LIB_VAR - 输出变量名，用于存储 protobuf 库的完整路径或库名
 #   PROTOBUF_INCLUDE_DIR_VAR - 输出变量名，用于存储 protobuf 头文件目录
 function(FIND_PROTOBUF_LIBRARY PROTOBUF_LIB_VAR PROTOBUF_INCLUDE_DIR_VAR)
-    # 缓存变量，避免重复查找
+    # 使用缓存变量，避免重复查找
     if(DEFINED _CACHED_PROTOBUF_LIB AND DEFINED _CACHED_PROTOBUF_INCLUDE)
         set(${PROTOBUF_LIB_VAR} ${_CACHED_PROTOBUF_LIB} PARENT_SCOPE)
         set(${PROTOBUF_INCLUDE_DIR_VAR} ${_CACHED_PROTOBUF_INCLUDE} PARENT_SCOPE)
@@ -152,31 +185,21 @@ function(FIND_PROTOBUF_LIBRARY PROTOBUF_LIB_VAR PROTOBUF_INCLUDE_DIR_VAR)
         return()
     endif()
     
-    # 如果第三方目录中不存在，尝试使用 find_library 查找系统安装的版本
-    # 使用 NO_DEFAULT_PATH 避免在系统路径中查找，优先使用第三方版本
+    # 查找系统安装的版本
     find_library(PROTOBUF_LIB_FOUND 
         NAMES protobuf libprotobuf
-        PATHS 
-            /usr/lib
-            /usr/local/lib
-            /usr/lib64
-            /usr/local/lib64
+        PATHS /usr/lib /usr/local/lib /usr/lib64 /usr/local/lib64
         NO_DEFAULT_PATH
     )
-    
-    # 如果上面没找到，再在默认路径中查找
     if(NOT PROTOBUF_LIB_FOUND)
         find_library(PROTOBUF_LIB_FOUND NAMES protobuf libprotobuf)
     endif()
     
     find_path(PROTOBUF_INCLUDE_FOUND
         NAMES google/protobuf/message.h
-        PATHS
-            /usr/include
-            /usr/local/include
+        PATHS /usr/include /usr/local/include
         NO_DEFAULT_PATH
     )
-    
     if(NOT PROTOBUF_INCLUDE_FOUND)
         find_path(PROTOBUF_INCLUDE_FOUND NAMES google/protobuf/message.h)
     endif()
@@ -255,20 +278,50 @@ function(ENSURE_PROTOBUF_LIBRARY)
     message(STATUS "Created protobuf library with sources: ${PROTOBUF_SRCS}")
 endfunction()
 
+# 定义基础库列表（所有模块默认链接的基础库）
+# 这些库会被自动链接到所有通过 ADD_SHARED_LIBRARY_FROM_DIR 创建的模块
+set(BASENODE_BASE_LIBS service_discovery CACHE INTERNAL "Base libraries automatically linked to all modules")
+
 # 从指定目录生成共享库
 # 参数:
 #   name - 库名称（也是输出文件名）
 #   source_dir - 源文件目录路径
 #   [PROTOBUF] - 可选参数，如果提供则自动链接 protobuf 库
+#   [NO_BASE_LIBS] - 可选参数，如果提供则不自动链接基础库
+#   [EXPORT_SYMBOLS] - 可选参数，如果提供则导出所有符号（用于基础库，供其他模块使用）
+#   [DEPENDS lib1 lib2 ...] - 可选，指定需要链接的其他库（使用 PUBLIC 链接）
 # 示例:
 #   ADD_SHARED_LIBRARY_FROM_DIR(player_module ${SRC_PATH}/game/player)
 #   ADD_SHARED_LIBRARY_FROM_DIR(player_module ${SRC_PATH}/game/player PROTOBUF)
+#   ADD_SHARED_LIBRARY_FROM_DIR(player_module ${SRC_PATH}/game/player PROTOBUF DEPENDS network)
+#   ADD_SHARED_LIBRARY_FROM_DIR(service_discovery ${SRC_PATH}/core/service_discovery/zookeeper NO_BASE_LIBS EXPORT_SYMBOLS)
+# 参数说明:
+#   name - 库名称
+#   source_dir - 源文件目录
+#   PROTOBUF - 可选，如果需要链接 protobuf 库
+#   NO_BASE_LIBS - 可选，如果提供则不自动链接基础库（用于基础库自身）
+#   EXPORT_SYMBOLS - 可选，如果提供则导出所有符号（用于基础库，确保 vtable 等符号在运行时可见）
+#   DEPENDS lib1 lib2 ... - 可选，指定需要链接的其他库（使用 PUBLIC 链接）
 function(ADD_SHARED_LIBRARY_FROM_DIR name source_dir)
-    # 检查是否有 PROTOBUF 参数
+    # 解析参数：PROTOBUF、NO_BASE_LIBS、EXPORT_SYMBOLS 和 DEPENDS
     set(need_protobuf FALSE)
+    set(no_base_libs FALSE)
+    set(export_symbols FALSE)
+    set(depends_libs "")
+    
+    set(current_keyword "")
     foreach(arg ${ARGN})
-        if(arg STREQUAL "PROTOBUF")
-            set(need_protobuf TRUE)
+        if(arg MATCHES "^(PROTOBUF|NO_BASE_LIBS|EXPORT_SYMBOLS|DEPENDS)$")
+            set(current_keyword ${arg})
+            if(arg STREQUAL "PROTOBUF")
+                set(need_protobuf TRUE)
+            elseif(arg STREQUAL "NO_BASE_LIBS")
+                set(no_base_libs TRUE)
+            elseif(arg STREQUAL "EXPORT_SYMBOLS")
+                set(export_symbols TRUE)
+            endif()
+        elseif(current_keyword STREQUAL "DEPENDS")
+            list(APPEND depends_libs ${arg})
         endif()
     endforeach()
 
@@ -276,25 +329,51 @@ function(ADD_SHARED_LIBRARY_FROM_DIR name source_dir)
     AUX_SOURCE_DIRECTORY(${source_dir} ${name}_SRCS)
     # 收集 module 目录的源文件，但排除 module_router.cpp 和 module_interface.cpp（它们在 basenode_core 中编译）
     AUX_SOURCE_DIRECTORY(${SRC_CORE_PATH}/module ${name}_TMP_MODULE_SRCS)
-    list(FILTER ${name}_TMP_MODULE_SRCS EXCLUDE REGEX ".*module_router\\.cpp$")
-    list(FILTER ${name}_TMP_MODULE_SRCS EXCLUDE REGEX ".*module_interface\\.cpp$")
+    list(FILTER ${name}_TMP_MODULE_SRCS EXCLUDE REGEX ".*module_(router|interface)\\.cpp$")
     list(APPEND ${name}_SRCS ${${name}_TMP_MODULE_SRCS})
-    Message(STATUS "${name}_SRCS -> ${${name}_SRCS}")
+    message(STATUS "${name}_SRCS -> ${${name}_SRCS}")
     
     # 创建共享库
     ADD_LIBRARY(${name} SHARED ${${name}_SRCS})
     
-    # 配置模块库属性
-    CONFIGURE_MODULE_LIBRARY(${name} ${source_dir})
+    # 确保 basenode_core 在模块之前构建
+    if(TARGET basenode_core)
+        add_dependencies(${name} basenode_core)
+    endif()
+    
+    # 配置模块库属性（传递 export_symbols 参数）
+    CONFIGURE_MODULE_LIBRARY(${name} ${source_dir} ${export_symbols})
     
     # 如果需要 protobuf，确保 protobuf 库存在并链接
     if(need_protobuf)
         ENSURE_PROTOBUF_LIBRARY()
         if(TARGET basenode_protobuf)
             target_link_libraries(${name} PRIVATE basenode_protobuf)
+            add_dependencies(${name} basenode_protobuf)
             message(STATUS "Linked protobuf library to ${name}")
         endif()
     endif()
+    
+    # 自动链接基础库（除非明确排除）
+    if(NOT no_base_libs)
+        foreach(base_lib ${BASENODE_BASE_LIBS})
+            if(TARGET ${base_lib})
+                target_link_libraries(${name} PUBLIC ${base_lib})
+                add_dependencies(${name} ${base_lib})
+                message(STATUS "Auto-linked base library ${base_lib} to ${name}")
+            endif()
+        endforeach()
+    endif()
+    
+    # 链接额外依赖库（使用 PUBLIC 链接，确保符号在运行时也可用）
+    foreach(dep ${depends_libs})
+        if(TARGET ${dep})
+            target_link_libraries(${name} PUBLIC ${dep})
+            message(STATUS "Linked ${dep} library to ${name}")
+        else()
+            message(WARNING "Dependency target ${dep} not found for ${name}")
+        endif()
+    endforeach()
 endfunction()
 
 
@@ -311,21 +390,16 @@ function(ADD_EXECUTABLE_FROM_DIRS name)
     set(source_dirs "")
     set(output_dir ${ROOT_PATH}/bin)
     set(libs "")
-    set(parse_output_dir FALSE)
-    set(parse_libs FALSE)
     
     # 解析参数
+    set(current_keyword "")
     foreach(arg ${ARGN})
-        if(arg STREQUAL "OUTPUT_DIR")
-            set(parse_output_dir TRUE)
-            set(parse_libs FALSE)
-        elseif(arg STREQUAL "LIBS")
-            set(parse_libs TRUE)
-            set(parse_output_dir FALSE)
-        elseif(parse_output_dir)
+        if(arg MATCHES "^(OUTPUT_DIR|LIBS)$")
+            set(current_keyword ${arg})
+        elseif(current_keyword STREQUAL "OUTPUT_DIR")
             set(output_dir ${arg})
-            set(parse_output_dir FALSE)
-        elseif(parse_libs)
+            set(current_keyword "")
+        elseif(current_keyword STREQUAL "LIBS")
             list(APPEND libs ${arg})
         else()
             list(APPEND source_dirs ${arg})
@@ -364,22 +438,18 @@ function(ADD_EXECUTABLE_FROM_DIRS name)
     # 创建可执行文件
     ADD_EXECUTABLE(${name} ${${name}_SRCS})
     
-    # 设置编译选项
-    target_compile_options(${name} PRIVATE 
-        -fmacro-prefix-map=${ROOT_PATH}/=  # 设置 __FILE__ 显示相对路径
-    )
+    # 设置编译选项（可执行文件默认不导出符号）
+    SET_TARGET_COMPILE_OPTIONS(${name} FALSE)
     
-    # 如果是 Debug 构建类型，添加调试选项
-    if(CMAKE_BUILD_TYPE STREQUAL "Debug")
-        target_compile_options(${name} PRIVATE 
-            -g3                              # 生成详细的调试信息（包括宏定义）
-            -O0                              # 禁用优化，确保调试时代码不被优化掉
-        )
-    endif()
-    
-    # 链接库
+    # 链接库并添加依赖关系
     if(libs)
         target_link_libraries(${name} PRIVATE ${libs})
+        # 为所有目标库添加显式依赖关系
+        foreach(lib ${libs})
+            if(TARGET ${lib})
+                add_dependencies(${name} ${lib})
+            endif()
+        endforeach()
     endif()
 endfunction()
 

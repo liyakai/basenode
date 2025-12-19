@@ -112,6 +112,34 @@ ErrorCode ModuleRouter::UnregisterModule(IModule* module)
     return ErrorCode::BN_SUCCESS;
 }
 
+ErrorCode ModuleRouter::CallAllModulesAfterInit()
+{
+    BaseNodeLogInfo("[ModuleRouter] CallAllModulesAfterInit: calling AfterAllModulesInit for %zu modules", module_id_to_module_.size());
+    
+    ErrorCode first_error = ErrorCode::BN_SUCCESS;
+    for (const auto &pair : module_id_to_module_)
+    {
+        IModule *module = pair.second;
+        if (!module)
+        {
+            continue;
+        }
+        ErrorCode err = module->AfterAllModulesInit();
+        if (err != ErrorCode::BN_SUCCESS)
+        {
+            BaseNodeLogError("[ModuleRouter] CallAllModulesAfterInit: module (id: %u, class: %s) AfterAllModulesInit failed, error: %d",
+                            pair.first, module->GetModuleClassName().c_str(), static_cast<int>(err));
+            if (first_error == ErrorCode::BN_SUCCESS)
+            {
+                first_error = err;
+            }
+        }
+    }
+    
+    BaseNodeLogInfo("[ModuleRouter] CallAllModulesAfterInit: completed, %zu modules processed", module_id_to_module_.size());
+    return first_error;
+}
+
 IModule* ModuleRouter::FindModuleByServiceId(uint32_t service_id) const
 {
     BaseNodeLogTrace("[ModuleRouter] FindModuleByServiceId: this=%p, service_id=%u, service_id_to_module_ size=%zu", 

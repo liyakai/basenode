@@ -43,6 +43,13 @@ public:
      */
     ErrorCode RouteProtocolPacket(std::string &&protocol_data);
 
+    /**
+     * @brief 调用所有已注册模块的 AfterAllModulesInit
+     * 在所有模块 Init 完成后调用，用于模块间的后置初始化
+     * @return 错误码（如果某个模块失败，返回第一个失败的错误码）
+     */
+    ErrorCode CallAllModulesAfterInit();
+
 private:
 
     /**

@@ -37,6 +37,10 @@ public:
     // 子类不应该重写此方法，而是重写 DoUninit()
     ErrorCode UnInit();
 
+    // 在所有模块 Init 完成后调用，用于模块间的后置初始化
+    // 子类可以重写此方法来实现需要依赖其他模块已初始化的逻辑
+    ErrorCode AfterAllModulesInit();
+
     ErrorCode PushModuleEvent(ModuleEvent&& module_event);
 
     ErrorCode SetServerSendCallback(std::function<void(uint64_t, std::string&&)>&& callback);
@@ -118,6 +122,9 @@ protected:
     virtual ErrorCode DoUpdate() = 0;
 
     virtual ErrorCode DoUninit() = 0;
+
+    // 子类可以重写此方法来实现在所有模块 Init 完成后的后置初始化逻辑
+    virtual ErrorCode DoAfterAllModulesInit() { return ErrorCode::BN_SUCCESS; }
     
 private:
     void ProcessRingBufferData_();

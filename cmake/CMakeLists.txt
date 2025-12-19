@@ -5,25 +5,8 @@ PROJECT(basenode)
 
 include(common_flag_libs.cmake)
 
-
-# 编译第三方库 toolbox
-# 在 add_subdirectory 之前，确保编译器变量是完整路径
-# 因为 common_flag_libs.cmake 中设置的是相对路径 "clang"，需要转换为完整路径
-if(CMAKE_C_COMPILER STREQUAL "clang" OR CMAKE_C_COMPILER MATCHES "^clang$")
-    find_program(CLANG_C_COMPILER clang PATHS /usr/lib64/ccache /usr/bin /usr/local/bin)
-    if(CLANG_C_COMPILER)
-        set(CMAKE_C_COMPILER ${CLANG_C_COMPILER} CACHE PATH "C compiler" FORCE)
-    endif()
-endif()
-if(CMAKE_CXX_COMPILER STREQUAL "clang++" OR CMAKE_CXX_COMPILER MATCHES "^clang\\+\\+$")
-    find_program(CLANG_CXX_COMPILER clang++ PATHS /usr/lib64/ccache /usr/bin /usr/local/bin)
-    if(CLANG_CXX_COMPILER)
-        set(CMAKE_CXX_COMPILER ${CLANG_CXX_COMPILER} CACHE PATH "C++ compiler" FORCE)
-    endif()
-endif()
-
-set(toolbox_dir ${ROOT_PATH}/3rdparty/toolbox)
-add_subdirectory(${toolbox_dir} ${CMAKE_BINARY_DIR}/toolbox_build EXCLUDE_FROM_ALL)
+# 添加第三方库 toolbox
+ADD_TOOLBOX_LIBRARY()
 
 # ============================================================================
 # 创建核心共享库 basenode_core
@@ -40,6 +23,9 @@ ADD_CORE_LIBRARY(basenode_core
 # 使用 PROTOBUF 参数自动链接 protobuf 库
 # ============================================================================
 ADD_SHARED_LIBRARY_FROM_DIR(gatenode ${SRC_PATH}/framework/gatenode)
+# service_discovery 是基础库，使用 NO_BASE_LIBS 避免自己链接自己，使用 EXPORT_SYMBOLS 导出符号供其他模块使用
+ADD_SHARED_LIBRARY_FROM_DIR(service_discovery ${SRC_PATH}/core/service_discovery/zookeeper NO_BASE_LIBS EXPORT_SYMBOLS)
+# 业务模块自动链接基础库（如 service_discovery），无需手动指定
 ADD_SHARED_LIBRARY_FROM_DIR(player_module ${SRC_PATH}/game/player PROTOBUF)
 ADD_SHARED_LIBRARY_FROM_DIR(guild_module ${SRC_PATH}/game/guild PROTOBUF)
 ADD_SHARED_LIBRARY_FROM_DIR(network ${SRC_PATH}/core/net)
