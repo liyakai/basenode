@@ -287,6 +287,7 @@ set(BASENODE_BASE_LIBS service_discovery CACHE INTERNAL "Base libraries automati
 #   name - 库名称（也是输出文件名）
 #   source_dir - 源文件目录路径
 #   [PROTOBUF] - 可选参数，如果提供则自动链接 protobuf 库
+#   [ZOOKEEPER] - 可选参数，如果提供则自动链接 zookeeper 库
 #   [NO_BASE_LIBS] - 可选参数，如果提供则不自动链接基础库
 #   [EXPORT_SYMBOLS] - 可选参数，如果提供则导出所有符号（用于基础库，供其他模块使用）
 #   [DEPENDS lib1 lib2 ...] - 可选，指定需要链接的其他库（使用 PUBLIC 链接）
@@ -294,27 +295,31 @@ set(BASENODE_BASE_LIBS service_discovery CACHE INTERNAL "Base libraries automati
 #   ADD_SHARED_LIBRARY_FROM_DIR(player_module ${SRC_PATH}/game/player)
 #   ADD_SHARED_LIBRARY_FROM_DIR(player_module ${SRC_PATH}/game/player PROTOBUF)
 #   ADD_SHARED_LIBRARY_FROM_DIR(player_module ${SRC_PATH}/game/player PROTOBUF DEPENDS network)
-#   ADD_SHARED_LIBRARY_FROM_DIR(service_discovery ${SRC_PATH}/core/service_discovery/zookeeper NO_BASE_LIBS EXPORT_SYMBOLS)
+#   ADD_SHARED_LIBRARY_FROM_DIR(service_discovery ${SRC_PATH}/core/service_discovery/zookeeper NO_BASE_LIBS EXPORT_SYMBOLS ZOOKEEPER)
 # 参数说明:
 #   name - 库名称
 #   source_dir - 源文件目录
 #   PROTOBUF - 可选，如果需要链接 protobuf 库
+#   ZOOKEEPER - 可选，如果需要链接 zookeeper 库
 #   NO_BASE_LIBS - 可选，如果提供则不自动链接基础库（用于基础库自身）
 #   EXPORT_SYMBOLS - 可选，如果提供则导出所有符号（用于基础库，确保 vtable 等符号在运行时可见）
 #   DEPENDS lib1 lib2 ... - 可选，指定需要链接的其他库（使用 PUBLIC 链接）
 function(ADD_SHARED_LIBRARY_FROM_DIR name source_dir)
-    # 解析参数：PROTOBUF、NO_BASE_LIBS、EXPORT_SYMBOLS 和 DEPENDS
+    # 解析参数：PROTOBUF、ZOOKEEPER、NO_BASE_LIBS、EXPORT_SYMBOLS 和 DEPENDS
     set(need_protobuf FALSE)
+    set(need_zookeeper FALSE)
     set(no_base_libs FALSE)
     set(export_symbols FALSE)
     set(depends_libs "")
     
     set(current_keyword "")
     foreach(arg ${ARGN})
-        if(arg MATCHES "^(PROTOBUF|NO_BASE_LIBS|EXPORT_SYMBOLS|DEPENDS)$")
+        if(arg MATCHES "^(PROTOBUF|ZOOKEEPER|NO_BASE_LIBS|EXPORT_SYMBOLS|DEPENDS)$")
             set(current_keyword ${arg})
             if(arg STREQUAL "PROTOBUF")
                 set(need_protobuf TRUE)
+            elseif(arg STREQUAL "ZOOKEEPER")
+                set(need_zookeeper TRUE)
             elseif(arg STREQUAL "NO_BASE_LIBS")
                 set(no_base_libs TRUE)
             elseif(arg STREQUAL "EXPORT_SYMBOLS")
@@ -352,6 +357,21 @@ function(ADD_SHARED_LIBRARY_FROM_DIR name source_dir)
             add_dependencies(${name} basenode_protobuf)
             message(STATUS "Linked protobuf library to ${name}")
         endif()
+    endif()
+    
+    # 如果需要 zookeeper，直接链接 zookeeper 库
+    if(need_zookeeper)
+        set(ZOOKEEPER_ROOT ${ROOT_PATH}/3rdparty/zookeeper)
+        target_include_directories(${name} PRIVATE ${ZOOKEEPER_ROOT}/include)
+        # 定义 THREADED 宏以启用同步 API（使用多线程版本库）
+        target_compile_definitions(${name} PRIVATE THREADED)
+        # zookeeper 库依赖 OpenSSL
+        target_link_libraries(${name} PRIVATE 
+            ${ZOOKEEPER_ROOT}/libs/libzookeeper_mt.a
+            ssl
+            crypto
+        )
+        message(STATUS "Linked zookeeper library to ${name}")
     endif()
     
     # 自动链接基础库（除非明确排除）

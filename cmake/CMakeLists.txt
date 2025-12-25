@@ -23,8 +23,8 @@ ADD_CORE_LIBRARY(basenode_core
 # 使用 PROTOBUF 参数自动链接 protobuf 库
 # ============================================================================
 ADD_SHARED_LIBRARY_FROM_DIR(gatenode ${SRC_PATH}/framework/gatenode)
-# service_discovery 是基础库，使用 NO_BASE_LIBS 避免自己链接自己，使用 EXPORT_SYMBOLS 导出符号供其他模块使用
-ADD_SHARED_LIBRARY_FROM_DIR(service_discovery ${SRC_PATH}/core/service_discovery/zookeeper NO_BASE_LIBS EXPORT_SYMBOLS)
+# service_discovery 是基础库，使用 NO_BASE_LIBS 避免自己链接自己，使用 EXPORT_SYMBOLS 导出符号供其他模块使用，使用 ZOOKEEPER 链接 zookeeper 库
+ADD_SHARED_LIBRARY_FROM_DIR(service_discovery ${SRC_PATH}/core/service_discovery/zookeeper NO_BASE_LIBS EXPORT_SYMBOLS ZOOKEEPER)
 # 业务模块自动链接基础库（如 service_discovery），无需手动指定
 ADD_SHARED_LIBRARY_FROM_DIR(player_module ${SRC_PATH}/game/player PROTOBUF)
 ADD_SHARED_LIBRARY_FROM_DIR(guild_module ${SRC_PATH}/game/guild PROTOBUF)

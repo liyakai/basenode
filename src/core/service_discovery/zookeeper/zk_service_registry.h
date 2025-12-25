@@ -40,15 +40,22 @@ public:
     {
         if (!zk_client_)
         {
+            BaseNodeLogError("Invalid zk_client_");
             return false;
         }
-        // 确保基础路径存在
+        BaseNodeLogInfo("Ready to EnsurePath in zookeeper. root:%s, ProcessesRoot:%s, ServicesRoot:%s."
+                        , paths_.root.c_str()
+                        , paths_.ProcessesRoot().c_str()
+                        , paths_.ServicesRoot().c_str()
+                    );
+        // 确保基础路径存在（这些路径应该是持久节点，因为需要在它们下面创建子节点）
         zk_client_->EnsurePath(paths_.root);
         zk_client_->EnsurePath(paths_.ProcessesRoot());
-        zk_client_->CreateEphemeral(paths_.ServicesRoot());
+        zk_client_->EnsurePath(paths_.ServicesRoot());
 
         // 注册进程节点（ephemeral）
         const auto process_path = paths_.ProcessPath(process_id_);
+        BaseNodeLogInfo("Ready to EnsurCreateEphemeralePath in zookeeper. process_path:%s.", process_path.c_str());
         return zk_client_->CreateEphemeral(process_path, /*data=*/"");
     }
 

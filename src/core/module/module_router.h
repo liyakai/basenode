@@ -102,7 +102,11 @@ private:
     IModule* network_module_ = nullptr;
 };
 
-#define ModuleRouterMgr ToolBox::Singleton<BaseNode::ModuleRouter>::Instance()
-
 } // namespace BaseNode
+
+// 获取 ModuleRouter 单例实例的全局函数（在 basenode_core 中实现）
+// 使用 extern "C" 确保符号在所有模块间共享
+extern "C" BaseNode::ModuleRouter* GetModuleRouterInstance();
+
+#define ModuleRouterMgr GetModuleRouterInstance()
 

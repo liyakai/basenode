@@ -1,4 +1,5 @@
 #include "service_discovery/zookeeper/zk_service_discovery_module.h"
+#include "service_discovery/zookeeper/zk_client_impl.h"
 
 #include "utils/basenode_def_internal.h"
 #include "protobuf/pb_out/errcode.pb.h"
@@ -14,6 +15,7 @@ void ZkServiceDiscoveryModule::Configure(IZkClientPtr zk_client,
     zk_client_  = std::move(zk_client);
     paths_      = paths;
     process_id_ = process_id;
+    BaseNodeLogInfo("[ZkServiceDiscovery] Configure success. paths:%s, process_id:%s", paths.root.c_str(), process_id.c_str());
 }
 
 ErrorCode ZkServiceDiscoveryModule::DoInit()
@@ -175,64 +177,6 @@ IInvokerPtr ZkServiceDiscoveryModule::CreateInvoker(DoCallFunc              do_c
     return circuit;
 }
 
-// 简单的 Mock ZK 客户端实现（用于测试，实际使用时需要替换为真实的 ZK 客户端）
-class MockZkClient : public IZkClient
-{
-public:
-    bool Connect(const std::string &hosts, int timeout_ms) override
-    {
-        BaseNodeLogInfo("[MockZkClient] Connect to %s (timeout: %d ms)", hosts.c_str(), timeout_ms);
-        connected_ = true;
-        return true;
-    }
-
-    bool EnsurePath(const std::string &path) override
-    {
-        BaseNodeLogInfo("[MockZkClient] EnsurePath: %s", path.c_str());
-        return true;
-    }
-
-    bool CreateEphemeral(const std::string &path, const std::string &data = "") override
-    {
-        BaseNodeLogInfo("[MockZkClient] CreateEphemeral: %s (data: %s)", path.c_str(), data.c_str());
-        return true;
-    }
-
-    bool Delete(const std::string &path) override
-    {
-        BaseNodeLogInfo("[MockZkClient] Delete: %s", path.c_str());
-        return true;
-    }
-
-    bool SetData(const std::string &path, const std::string &data) override
-    {
-        BaseNodeLogInfo("[MockZkClient] SetData: %s (data: %s)", path.c_str(), data.c_str());
-        return true;
-    }
-
-    bool GetData(const std::string &path, std::string &out_data) override
-    {
-        BaseNodeLogInfo("[MockZkClient] GetData: %s", path.c_str());
-        out_data = "";
-        return true;
-    }
-
-    std::vector<std::string> GetChildren(const std::string &path) override
-    {
-        BaseNodeLogInfo("[MockZkClient] GetChildren: %s", path.c_str());
-        return {};
-    }
-
-    bool WatchChildren(const std::string &path, ChildrenChangedCallback cb) override
-    {
-        BaseNodeLogInfo("[MockZkClient] WatchChildren: %s", path.c_str());
-        return true;
-    }
-
-private:
-    bool connected_ = false;
-};
-
 // 插件导出符号，方便通过 PluginLoadManager 装载
 extern "C" SO_EXPORT_SYMBOL void SO_EXPORT_FUNC_INIT()
 {
@@ -242,12 +186,21 @@ extern "C" SO_EXPORT_SYMBOL void SO_EXPORT_FUNC_INIT()
     std::string process_id = "basenode-process-" + std::to_string(getpid());  // 示例：实际应从配置读取
     ZkPaths paths{"/basenode"};  // 示例：实际应从配置读取
     
-    // 创建 Mock ZK 客户端并连接
-    // TODO: 实际使用时需要替换为真实的 ZK 客户端实现（如 zookeeper-c 的封装）
-    auto zk_client = std::make_shared<MockZkClient>();
+    // 创建真实的 Zookeeper 客户端并连接
+    auto zk_client = std::make_shared<ZkClientImpl>();
     if (!zk_client->Connect(zk_hosts, /*timeout_ms=*/3000))
     {
-        BaseNodeLogError("[ZkServiceDiscovery] initSo: MockZkClient Connect failed");
+        BaseNodeLogError("[ZkServiceDiscovery] initSo: ZkClientImpl Connect failed to %s", zk_hosts.c_str());
+        return;
+    }
+    
+    // 如果 Zookeeper 启用了 digest 认证，需要添加认证信息
+    // TODO: 从配置读取用户名和密码
+    std::string zk_username = "admin";  // 示例：实际应从配置读取
+    std::string zk_password = "password";  // 示例：实际应从配置读取
+    if (!zk_client->AddAuth(zk_username, zk_password))
+    {
+        BaseNodeLogError("[ZkServiceDiscovery] initSo: AddAuth failed");
         return;
     }
     

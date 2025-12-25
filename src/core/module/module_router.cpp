@@ -246,6 +246,20 @@ ErrorCode ModuleRouter::RouteRpcData_(std::string &&rpc_data, ModuleEvent::Event
 
 } // namespace BaseNode
 
+// 全局单例实例（在 basenode_core 中定义，使用 static 确保只在此文件中定义一次）
+// 所有模块通过 GetModuleRouterInstance() 函数访问，确保使用同一个实例
+static BaseNode::ModuleRouter* g_module_router_instance = nullptr;
+
+// 获取 ModuleRouter 单例实例的全局函数（导出符号，确保所有模块使用同一个实例）
+// 函数在 basenode_core 中定义，所有模块调用此函数时都会使用 basenode_core 中的 Singleton 实例
+extern "C" SO_EXPORT_SYMBOL BaseNode::ModuleRouter* GetModuleRouterInstance() {
+    if (!g_module_router_instance) {
+        // 在 basenode_core 的上下文中调用，使用 basenode_core 中的 Singleton 静态成员变量
+        g_module_router_instance = ToolBox::Singleton<BaseNode::ModuleRouter>::Instance();
+    }
+    return g_module_router_instance;
+}
+
 extern "C" SO_EXPORT_SYMBOL void SO_EXPORT_FUNC_INIT() {
     // ModuleRouterMgr->Init();
 }
