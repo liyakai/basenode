@@ -1,6 +1,7 @@
 #include "service_discovery/zookeeper/zk_service_discovery_module.h"
 #include "service_discovery/zookeeper/zk_client_impl.h"
 
+#include "tools/md5.h"
 #include "utils/basenode_def_internal.h"
 #include "protobuf/pb_out/errcode.pb.h"
 #include <unistd.h>  // for getpid()
@@ -46,45 +47,45 @@ ErrorCode ZkServiceDiscoveryModule::DoInit()
         return ErrorCode::BN_INVALID_ARGUMENTS;
     }
 
-    // 构造进程级的 ServiceInstance
-    // 注意：以下字段应该从配置中心/启动参数/环境变量中读取，这里仅作示例
-    ServiceInstance process_instance;
+    // // 构造进程级的 ServiceInstance
+    // // 注意：以下字段应该从配置中心/启动参数/环境变量中读取，这里仅作示例
+    // ServiceInstance process_instance;
 
-    // service_name: 进程的逻辑服务名（例如 "basenode-game", "basenode-gate" 等）
-    // TODO: 从配置读取，例如 process_instance.service_name = ConfigMgr->GetProcessServiceName();
-    process_instance.service_name = "basenode-process";
+    // // service_name: 进程的逻辑服务名（例如 "basenode-game", "basenode-gate" 等）
+    // // TODO: 从配置读取，例如 process_instance.service_name = ConfigMgr->GetProcessServiceName();
+    // process_instance.service_name = "basenode-process";
 
-    // instance_id: 进程的唯一标识（使用 Configure 时传入的 process_id_）
-    process_instance.instance_id = service_hosts_;
+    // // instance_id: 进程的唯一标识（使用 Configure 时传入的 process_id_）
+    // process_instance.instance_id = service_hosts_;
 
-    // host/port: 进程对外提供 RPC 服务的监听地址
-    // TODO: 从 Network 模块或配置读取实际监听地址
-    // 例如：process_instance.host = NetworkMgr->GetListenIP();
-    //       process_instance.port = NetworkMgr->GetListenPort();
-    process_instance.host = "127.0.0.1"; // 示例：实际应从配置/Network 模块获取
-    process_instance.port = 9000;         // 示例：实际应从配置/Network 模块获取
+    // // host/port: 进程对外提供 RPC 服务的监听地址
+    // // TODO: 从 Network 模块或配置读取实际监听地址
+    // // 例如：process_instance.host = NetworkMgr->GetListenIP();
+    // //       process_instance.port = NetworkMgr->GetListenPort();
+    // process_instance.host = "127.0.0.1"; // 示例：实际应从配置/Network 模块获取
+    // process_instance.port = 9000;         // 示例：实际应从配置/Network 模块获取
 
-    // metadata: 进程的元数据（zone/idc/version 等）
-    // TODO: 从配置中心读取
-    process_instance.metadata["zone"]    = "sh";   // 示例
-    process_instance.metadata["idc"]     = "sh01"; // 示例
-    process_instance.metadata["version"] = "v1";   // 示例
-    process_instance.metadata["weight"]  = "100";   // 示例
+    // // metadata: 进程的元数据（zone/idc/version 等）
+    // // TODO: 从配置中心读取
+    // process_instance.metadata["zone"]    = "sh";   // 示例
+    // process_instance.metadata["idc"]     = "sh01"; // 示例
+    // process_instance.metadata["version"] = "v1";   // 示例
+    // process_instance.metadata["weight"]  = "100";   // 示例
 
-    process_instance.healthy = true;
+    // process_instance.healthy = true;
 
-    // 注册进程级 ServiceInstance 到 Zookeeper
-    if (!RegisterInstance(process_instance))
-    {
-        BaseNodeLogError("[ZkServiceDiscovery] DoAfterAllModulesInit: failed to register process-level ServiceInstance");
-        return ErrorCode::BN_INVALID_ARGUMENTS; // TODO: 应该添加一个通用的 BN_FAILED 错误码
-    }
+    // // 注册进程级 ServiceInstance 到 Zookeeper
+    // if (!registry_->RegistService(process_instance))
+    // {
+    //     BaseNodeLogError("[ZkServiceDiscovery] DoInit: failed to register process-level ServiceInstance");
+    //     return ErrorCode::BN_INVALID_ARGUMENTS; // TODO: 应该添加一个通用的 BN_FAILED 错误码
+    // }
 
-    BaseNodeLogInfo("[ZkServiceDiscovery] DoAfterAllModulesInit: registered process instance, service_name=%s, instance_id=%s, host=%s, port=%u",
-                    process_instance.service_name.c_str(),
-                    process_instance.instance_id.c_str(),
-                    process_instance.host.c_str(),
-                    process_instance.port);
+    // BaseNodeLogInfo("[ZkServiceDiscovery] DoAfterAllModulesInit: registered process instance, service_name=%s, instance_id=%s, host=%s, port=%u",
+    //                 process_instance.service_name.c_str(),
+    //                 process_instance.instance_id.c_str(),
+    //                 process_instance.host.c_str(),
+    //                 process_instance.port);
 
     return ErrorCode::BN_SUCCESS;
 }
@@ -121,7 +122,7 @@ bool ZkServiceDiscoveryModule::RegisterInstance(const ServiceInstance &instance)
     {
         return false;
     }
-    return registry_->Register(instance);
+    return registry_->RegistService(instance);
 }
 
 bool ZkServiceDiscoveryModule::DeregisterInstance(const ServiceInstance &instance)
@@ -130,7 +131,7 @@ bool ZkServiceDiscoveryModule::DeregisterInstance(const ServiceInstance &instanc
     {
         return false;
     }
-    return registry_->Deregister(instance);
+    return registry_->DeRegisterService(instance);
 }
 
 bool ZkServiceDiscoveryModule::RegisterModuleInServiceDiscovery(BaseNode::IModule *module)
@@ -139,7 +140,50 @@ bool ZkServiceDiscoveryModule::RegisterModuleInServiceDiscovery(BaseNode::IModul
     {
         return false;
     }
-    return registry_->RegisterModuleInServiceDiscovery(module);
+    if (!module || !zk_client_)
+    {
+        return false;
+    }
+    const auto module_path   = paths_.ModulePath(module->GetModuleClassName());
+
+    // // 确保 /modules 路径存在（应该在 Init() 中已创建，这里再次确保）
+    // const std::string modules_path = paths_.ProcessPath(service_hosts_) + "/modules";
+    // if (!zk_client_->EnsurePath(modules_path))
+    // {
+    //     BaseNodeLogError("Failed to ensure modules path: %s", modules_path.c_str());
+    //     return false;
+    // }
+    
+    // if (!zk_client_->CreateEphemeral(module_path, module->GetModuleClassName()))
+    // {
+    //     // 已存在也可以视为成功
+    // }
+
+    // 注册该模块下所有 RPC 函数 HandlerKey
+    auto handler_keys = module->GetAllServiceHandlerKeys();
+    // if (!handler_keys.empty())
+    // {
+    //     zk_client_->EnsurePath(module_path + "/rpcs");
+    // }
+    for (auto key : handler_keys)
+    {
+        BaseNode::ServiceDiscovery::ServiceInstance service_instance;
+        service_instance.service_name = std::to_string(key);
+        service_instance.instance_id = std::to_string(MD5Hash32Constexpr(std::to_string(key)));
+        service_instance.module_name = module->GetModuleClassName();
+        service_instance.host = "127.0.0.1";  // TODO: 从配置读取/Network 模块获取
+        service_instance.port = 9000;         // TODO: 从配置读取/Network 模块获取
+        service_instance.healthy = true;    
+        if (!registry_->RegistService(service_instance))
+        {
+            BaseNodeLogError("[ZkServiceDiscoveryModule] RegisterModuleInServiceDiscovery: failed to register service instance. service_instance:%s."
+                            , service_instance.SerializeInstance().c_str());
+            return false;
+        }
+    }
+    BaseNodeLogInfo("RegisterModuleInServiceDiscovery success. module_class_name:%s, module_path:%s, handler_keys size:%d."
+                    , module->GetModuleClassName().c_str(), module_path.c_str(), handler_keys.size());
+    return true;
 }
 
 bool ZkServiceDiscoveryModule::DeregisterModuleInServiceDiscovery(BaseNode::IModule *module)
@@ -148,7 +192,25 @@ bool ZkServiceDiscoveryModule::DeregisterModuleInServiceDiscovery(BaseNode::IMod
     {
         return false;
     }
-    return registry_->DeregisterModuleInServiceDiscovery(module);
+    const auto module_id_str = module->GetModuleClassName();
+    const auto module_path   = paths_.ModulePath(module_id_str);
+    // 简单删除模块路径整棵子树（具体实现时可递归删除）
+    zk_client_->Delete(module_path);
+    return true;
+
+    ServiceInstance service_instance;
+    service_instance.service_name = module->GetModuleClassName();
+
+    int result = registry_->DeRegisterService(service_instance);
+    if(!result)
+    {
+        BaseNodeLogError("[ZkServiceDiscoveryModule] DeregisterModuleInServiceDiscovery: failed to deregister service instance. service_instance:%s."
+            , service_instance.SerializeInstance().c_str());
+        return false;
+    }    
+    BaseNodeLogInfo("[ZkServiceDiscoveryModule] DeregisterModuleInServiceDiscovery: deregistered service instance. service_name:%s, module_path:%s."
+        , service_instance.service_name.c_str(), module_path.c_str());
+    return true;
 }
 
 std::optional<ServiceInstance>

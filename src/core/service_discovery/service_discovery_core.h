@@ -25,12 +25,52 @@ namespace BaseNode::ServiceDiscovery
 struct ServiceInstance
 {
     std::string service_name;
+    std::string module_name;
     std::string instance_id;
     std::string host;
     uint16_t    port{0};
     bool        healthy{true};
     std::unordered_map<std::string, std::string> metadata;
+
+
+    // 一个非常简单的序列化，将 ServiceInstance 序列化为 "host:port;key1=val1;key2=val2" 形式
+    std::string SerializeInstance() const
+    {
+        std::string data = host + ":" + std::to_string(port);
+        data.append(";module_name:").append(module_name);
+        data.append(";instance_id:").append(instance_id);
+        data.append(";healthy:").append(healthy ? "true" : "false");
+        for (const auto &kv : metadata)
+        {
+            data.append(";");
+            data.append(kv.first).append("=").append(kv.second);
+        }
+        return data;
+    }
+    static ServiceInstance ParseInstance(const std::string &data)
+    {
+        ServiceInstance instance;
+        auto colon_pos = data.find(':');
+        if (colon_pos != std::string::npos)
+        {
+            instance.host = data.substr(0, colon_pos);
+            instance.port = static_cast<uint16_t>(std::stoi(data.substr(colon_pos + 1)));
+        }
+        auto semicolon_pos = data.find(';');
+        if (semicolon_pos != std::string::npos)
+        {
+            instance.module_name = data.substr(semicolon_pos + 1);
+        }
+        auto equal_pos = instance.module_name.find('=');
+        if (equal_pos != std::string::npos)
+        {
+            instance.instance_id = instance.module_name.substr(equal_pos + 1);
+        }
+        return instance;
+    }
+
 };
+
 
 // ------------------------- Registry 接口 ---------------------------
 
@@ -39,12 +79,10 @@ class IServiceRegistry
 public:
     virtual ~IServiceRegistry() = default;
 
-    virtual bool Register(const ServiceInstance &instance)   = 0;
-    virtual bool Deregister(const ServiceInstance &instance) = 0;
-    virtual bool Renew(const ServiceInstance &instance)      = 0;
+    virtual bool RegistService(const ServiceInstance &instance)   = 0;
+    virtual bool DeRegisterService(const ServiceInstance &instance) = 0;
+    virtual bool RenewService(const ServiceInstance &instance)      = 0;
 };
-
-using IServiceRegistryPtr = std::shared_ptr<IServiceRegistry>;
 
 // ------------------------- Discovery 接口 --------------------------
 

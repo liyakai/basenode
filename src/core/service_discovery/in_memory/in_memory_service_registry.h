@@ -19,7 +19,7 @@ namespace BaseNode::ServiceDiscovery
 class InMemoryServiceRegistry final : public IServiceRegistry
 {
 public:
-    bool Register(const ServiceInstance &instance) override
+    bool RegistService(const ServiceInstance &instance) override
     {
         std::lock_guard<std::mutex> lock(mutex_);
         auto                        &vec = services_[instance.service_name];
@@ -36,7 +36,7 @@ public:
         return true;
     }
 
-    bool Deregister(const ServiceInstance &instance) override
+    bool DeRegisterService(const ServiceInstance &instance) override
     {
         std::lock_guard<std::mutex> lock(mutex_);
         auto                        it = services_.find(instance.service_name);
@@ -58,7 +58,7 @@ public:
         return true;
     }
 
-    bool Renew(const ServiceInstance &instance) override
+    bool RenewService(const ServiceInstance &instance) override
     {
         // 仅演示占位：真正的注册中心通常需要心跳 / 租约续约
         std::lock_guard<std::mutex> lock(mutex_);

@@ -23,18 +23,12 @@ struct ZkPaths
     explicit ZkPaths(std::string r) : root(std::move(r)) {}
 
     std::string ProcessesRoot() const { return root + "/processes"; }
-    std::string ServicesRoot() const { return root + "/services"; }
     std::string ModulesRoot() const { return root + "/modules"; }
-    std::string RpcsRoot() const { return root + "/rpcs"; }
+    std::string ServicesRoot() const { return root + "/services"; }
 
     std::string ProcessPath(const std::string &process_id) const
     {
         return ProcessesRoot() + "/" + process_id;
-    }
-
-    std::string ServicePath(const std::string &service_name) const
-    {
-        return ServicesRoot() + "/" + service_name;
     }
 
     std::string ModulePath(const std::string &module_class_name) const
@@ -42,14 +36,9 @@ struct ZkPaths
         return ModulesRoot() + "/" + module_class_name;
     }
 
-    std::string RpcFuncPath(const std::string &rpc_key) const
+    std::string ServicePath(const std::string &service_name) const
     {
-        return RpcsRoot() + "/" + rpc_key;
-    }
-
-    std::string RpcFuncValue(const std::string& module_id, const std::string ip_port) const
-    {
-        return "module_id:" + module_id+ "|ip_port:"+ip_port;
+        return ServicesRoot() + "/" + service_name;
     }
 
     std::string ServiceInstancesPath(const std::string &service_name) const

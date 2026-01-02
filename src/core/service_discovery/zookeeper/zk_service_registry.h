@@ -75,68 +75,13 @@ public:
         return true;
     }
 
-    /**
-     * @brief 注册模块及其 RPC 函数
-     */
-    bool RegisterModuleInServiceDiscovery(BaseNode::IModule *module)
-    {
-        if (!module || !zk_client_)
-        {
-            return false;
-        }
-        const auto module_path   = paths_.ModulePath(module->GetModuleClassName());
-
-        // // 确保 /modules 路径存在（应该在 Init() 中已创建，这里再次确保）
-        // const std::string modules_path = paths_.ProcessPath(service_hosts_) + "/modules";
-        // if (!zk_client_->EnsurePath(modules_path))
-        // {
-        //     BaseNodeLogError("Failed to ensure modules path: %s", modules_path.c_str());
-        //     return false;
-        // }
-        
-        if (!zk_client_->CreateEphemeral(module_path, module->GetModuleClassName()))
-        {
-            // 已存在也可以视为成功
-        }
-
-        // 注册该模块下所有 RPC 函数 HandlerKey
-        auto handler_keys = module->GetAllServiceHandlerKeys();
-        if (!handler_keys.empty())
-        {
-            zk_client_->EnsurePath(module_path + "/rpcs");
-        }
-        for (auto key : handler_keys)
-        {
-            const auto rpc_key  = std::to_string(key);
-            const auto rpc_path = paths_.RpcFuncPath(rpc_key);
-            const auto rpc_data = paths_.RpcFuncValue(module->GetModuleClassName(), service_hosts_);
-            zk_client_->CreateEphemeral(rpc_path, rpc_data);
-            BaseNodeLogInfo("Register rpc to zk success. rpc_path:%s, rpc_data:%s.", rpc_path.c_str(), rpc_data.c_str());
-        }
-        BaseNodeLogInfo("RegisterModuleInServiceDiscovery success. module_class_name:%s, module_path:%s.", module->GetModuleClassName().c_str(), module_path.c_str());
-        return true;
-    }
-
-    bool DeregisterModuleInServiceDiscovery(BaseNode::IModule *module)
-    {
-        if (!module || !zk_client_)
-        {
-            return false;
-        }
-        const auto module_id_str = module->GetModuleClassName();
-        const auto module_path   = paths_.ModulePath(module_id_str);
-        // 简单删除模块路径整棵子树（具体实现时可递归删除）
-        zk_client_->Delete(module_path);
-        return true;
-    }
-
     // ------------ IServiceRegistry 接口：服务实例注册 ------------ //
 
-    bool Register(const BaseNode::ServiceDiscovery::ServiceInstance &instance) override;
+    bool RegistService(const BaseNode::ServiceDiscovery::ServiceInstance &instance) override;
 
-    bool Deregister(const BaseNode::ServiceDiscovery::ServiceInstance &instance) override;
+    bool DeRegisterService(const BaseNode::ServiceDiscovery::ServiceInstance &instance) override;
 
-    bool Renew(const BaseNode::ServiceDiscovery::ServiceInstance &instance) override;
+    bool RenewService(const BaseNode::ServiceDiscovery::ServiceInstance &instance) override;
 
 private:
     IZkClientPtr zk_client_;
