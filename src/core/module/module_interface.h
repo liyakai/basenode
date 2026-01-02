@@ -1,5 +1,6 @@
 #pragma once
 #include "module_event.h"
+#include "module_zk_registry.h"
 #include "utils/basenode_def_internal.h"
 #include "tools/ringbuffer.h"
 #include "tools/function_traits.h"
@@ -134,6 +135,8 @@ private:
      * @return 错误码
      */
      ErrorCode RegisterToRouter_();
+
+     ErrorCode RegisterToZk_();
 
 private:
     ToolBox::RingBufferSPSC<ModuleEvent, DEFAULT_MODULE_RING_BUFF_SIZE> recv_ring_buffer_; // 接收缓冲区

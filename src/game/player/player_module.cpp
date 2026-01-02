@@ -31,41 +31,41 @@ ErrorCode Player::DoUninit()
 ErrorCode Player::OnLogin(uint64_t player_id)
 {
     BaseNodeLogInfo("PlayerModule OnLogin, player_id: %llu", player_id);
-    // 异步调用Guild模块的OnPlayerLogin RPC服务（直接使用成员函数指针）
-    CallModuleService<&Guild::OnPlayerLogin>(player_id).then([](auto result) {
-        BaseNodeLogInfo("PlayerModule OnLogin: Guild::OnPlayerLogin completed, version 1, result: %d", static_cast<int>(*result));
-    });
+    // // 异步调用Guild模块的OnPlayerLogin RPC服务（直接使用成员函数指针）
+    // CallModuleService<&Guild::OnPlayerLogin>(player_id).then([](auto result) {
+    //     BaseNodeLogInfo("PlayerModule OnLogin: Guild::OnPlayerLogin completed, version 1, result: %d", static_cast<int>(*result));
+    // });
 
-    // 异步调用Guild模块的协程版 OnPlayerLoginCoro RPC 服务
-    CallModuleService<&Guild::OnPlayerLoginCoro>(player_id).then([](auto) {
-        BaseNodeLogInfo("PlayerModule OnLogin: Guild::OnPlayerLoginCoro completed, version 2");
-    });
+    // // 异步调用Guild模块的协程版 OnPlayerLoginCoro RPC 服务
+    // CallModuleService<&Guild::OnPlayerLoginCoro>(player_id).then([](auto) {
+    //     BaseNodeLogInfo("PlayerModule OnLogin: Guild::OnPlayerLoginCoro completed, version 2");
+    // });
 
-    // 使用协程方式调用 Guild 模块的 OnPlayerLogin RPC 服务
-    OnLoginCoroutine(player_id);
-    // 使用协程方式直接调用 Guild 模块的 OnPlayerLoginCoro RPC 服务
-    OnLoginCoroutineWithGuildCoro(player_id);
-    // 使用流式RPC获取公会成员列表
-    FetchGuildMembers(1001).then([](auto) {
-        BaseNodeLogInfo("PlayerModule OnLogin: FetchGuildMembers completed");
-    });
-    // 使用流式RPC获取公会成员ID列表（数值类型）
-    FetchGuildMemberIds(1001).then([](auto) {
-        BaseNodeLogInfo("PlayerModule OnLogin: FetchGuildMemberIds completed");
-    });
-    // 使用基于 PB 的 RPC 获取公会信息（示例：使用玩家所属的公会ID）
-    constexpr uint64_t kExampleGuildId = 1001;
-    GetGuildInfoByPB(kExampleGuildId).then([](auto) {
-        BaseNodeLogInfo("PlayerModule OnLogin: GetGuildInfoByPB completed");
-    });
+    // // 使用协程方式调用 Guild 模块的 OnPlayerLogin RPC 服务
+    // OnLoginCoroutine(player_id);
+    // // 使用协程方式直接调用 Guild 模块的 OnPlayerLoginCoro RPC 服务
+    // OnLoginCoroutineWithGuildCoro(player_id);
+    // // 使用流式RPC获取公会成员列表
+    // FetchGuildMembers(1001).then([](auto) {
+    //     BaseNodeLogInfo("PlayerModule OnLogin: FetchGuildMembers completed");
+    // });
+    // // 使用流式RPC获取公会成员ID列表（数值类型）
+    // FetchGuildMemberIds(1001).then([](auto) {
+    //     BaseNodeLogInfo("PlayerModule OnLogin: FetchGuildMemberIds completed");
+    // });
+    // // 使用基于 PB 的 RPC 获取公会信息（示例：使用玩家所属的公会ID）
+    // constexpr uint64_t kExampleGuildId = 1001;
+    // GetGuildInfoByPB(kExampleGuildId).then([](auto) {
+    //     BaseNodeLogInfo("PlayerModule OnLogin: GetGuildInfoByPB completed");
+    // });
 
-    GetGuildInfoByPBCoro(1001).then([](auto) {
-        BaseNodeLogInfo("PlayerModule OnLogin: GetGuildInfoByPBCoro completed");
-    });
+    // GetGuildInfoByPBCoro(1001).then([](auto) {
+    //     BaseNodeLogInfo("PlayerModule OnLogin: GetGuildInfoByPBCoro completed");
+    // });
 
-    FetchGuildMembersByPB(1001).then([](auto) {
-        BaseNodeLogInfo("PlayerModule OnLogin: FetchGuildMembersByPB completed");
-    });
+    // FetchGuildMembersByPB(1001).then([](auto) {
+    //     BaseNodeLogInfo("PlayerModule OnLogin: FetchGuildMembersByPB completed");
+    // });
 
     // 使用 Zookeeper 服务发现 + RequestContext 路由后再调用 PB RPC
     GetGuildInfoByServiceDiscovery(1001).then([](auto) {

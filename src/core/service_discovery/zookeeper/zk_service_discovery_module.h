@@ -1,6 +1,7 @@
 #pragma once
 
 #include "module/module_interface.h"
+#include "module/module_zk_registry.h"
 #include "service_discovery/service_discovery_core.h"
 #include "service_discovery/invoker.h"
 #include "service_discovery/zookeeper/zk_client.h"
@@ -63,7 +64,7 @@ protected:
 private:
     IZkClientPtr         zk_client_;
     ZkPaths              paths_{"/basenode"};
-    std::string          process_id_;
+    std::string          service_hosts_;
 
     ZkServiceRegistryPtr   registry_;
     ZkServiceDiscoveryPtr  discovery_;
@@ -73,6 +74,40 @@ private:
 
 /// 全局单例访问宏（与 NetworkMgr 风格保持一致）
 #define ZkServiceDiscoveryMgr ::ToolBox::Singleton<BaseNode::ServiceDiscovery::Zookeeper::ZkServiceDiscoveryModule>::Instance()
+
+/**
+ * @brief IModuleZkRegistry 接口的实现类
+ * 将模块注册请求转发给 ZkServiceDiscoveryModule
+ */
+class ModuleZkRegistryImpl final : public BaseNode::IModuleZkRegistry
+{
+public:
+    explicit ModuleZkRegistryImpl(ZkServiceDiscoveryModule* zk_module)
+        : zk_module_(zk_module)
+    {
+    }
+
+    bool RegisterModule(BaseNode::IModule* module) override
+    {
+        if (!zk_module_ || !module)
+        {
+            return false;
+        }
+        return zk_module_->RegisterModuleInServiceDiscovery(module);
+    }
+
+    bool DeregisterModule(BaseNode::IModule* module) override
+    {
+        if (!zk_module_ || !module)
+        {
+            return false;
+        }
+        return zk_module_->DeregisterModuleInServiceDiscovery(module);
+    }
+
+private:
+    ZkServiceDiscoveryModule* zk_module_;
+};
 
 } // namespace BaseNode::ServiceDiscovery::Zookeeper
 

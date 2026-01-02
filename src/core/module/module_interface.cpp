@@ -17,6 +17,13 @@ namespace BaseNode
             BaseNodeLogError("[module] Failed to register module (id: %u) to router, error: %d", GetModuleId(), err);
             return err;
         }
+        // 注册模块到 Zookeeper（如果 service_discovery 模块已加载）
+        err = RegisterToZk_();
+        if (err != ErrorCode::BN_SUCCESS) {
+            BaseNodeLogError("[module] Failed to register module (id: %u) to ZK, error: %d", GetModuleId(), err);
+            // 注意：ZK 注册失败不应该阻止模块初始化，只记录日志
+            // 如果业务需要强制 ZK 注册，可以在这里返回错误
+        }
         rpc_client_.set_client_id(GetModuleId());
         return ErrorCode::BN_SUCCESS;
     }
@@ -33,10 +40,20 @@ namespace BaseNode
             BaseNodeLogError("[module] UnInit failed, error: %d", err);
             return err;
         }
+        // 从路由管理器注销
         err = ModuleRouterMgr->UnregisterModule(this);
         if (err != ErrorCode::BN_SUCCESS) {
             BaseNodeLogError("[module] UnregisterModule failed");
             return err;
+        }
+        // 从 Zookeeper 注销（如果 service_discovery 模块已加载）
+        if (ModuleZkRegistryMgr) {
+            if (!ModuleZkRegistryMgr->DeregisterModule(this)) {
+                BaseNodeLogError("[module] Failed to deregister module (id: %u) from ZK", GetModuleId());
+                // 注销失败不影响 UnInit 流程
+            } else {
+                BaseNodeLogInfo("[module] Successfully deregistered module (id: %u) from ZK", GetModuleId());
+            }
         }
         return ErrorCode::BN_SUCCESS;
     }
@@ -116,6 +133,27 @@ namespace BaseNode
     ErrorCode IModule::RegisterToRouter_()
     {
         return ModuleRouterMgr->RegisterModule(this);
+    }
+
+    // 使用接口模式注册模块到 ZK，与 ModuleRouter 保持一致，避免循环依赖
+    ErrorCode IModule::RegisterToZk_()
+    {
+        // 如果 service_discovery 模块未加载，ModuleZkRegistryMgr 为 nullptr
+        if (!ModuleZkRegistryMgr) {
+            BaseNodeLogInfo("[module] ModuleZkRegistryMgr is null, skip ZK registration for module (id: %u, class: %s)", 
+                           GetModuleId(), GetModuleClassName().c_str());
+            return ErrorCode::BN_SUCCESS;  // 不是错误，只是未启用 ZK
+        }
+        
+        if (!ModuleZkRegistryMgr->RegisterModule(this)) {
+            BaseNodeLogError("[module] RegisterToZk_ failed for module (id: %u, class: %s)", 
+                            GetModuleId(), GetModuleClassName().c_str());
+            return ErrorCode::BN_REGISTER_MODULE_TO_ZK_FAILED;
+        }
+        
+        BaseNodeLogInfo("[module] RegisterToZk_ success for module (id: %u, class: %s)", 
+                       GetModuleId(), GetModuleClassName().c_str());
+        return ErrorCode::BN_SUCCESS;
     }
 
 } // namespace BaseNode

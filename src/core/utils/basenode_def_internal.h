@@ -41,6 +41,7 @@ enum class ErrorCode : int32_t
     BN_MODULE_ALREADY_REGISTERED = 6,   // 模块已注册
     BN_SERVICE_ID_ALREADY_REGISTERED = 7,   // 服务ID已注册
     BN_NETWORK_START_FAILED = 8,   // 网络库启动失败
+    BN_REGISTER_MODULE_TO_ZK_FAILED = 9,   // 注册模块到ZK失败
 };
 
 } // namespace BaseNode

@@ -27,11 +27,6 @@ ErrorCode Guild::DoInit()
                     &Guild::GetGuildInfoCoro,
                     &Guild::GetGuildMembersStreamPB>(this);
 
-    // 注册模块及其 RPC 函数信息到服务发现（仅记录"模块/RPC"这一层）
-    if (!ZkServiceDiscoveryMgr->RegisterModuleInServiceDiscovery(this))
-    {
-        BaseNodeLogWarn("GuildModule DoInit: RegisterModule to ZK failed");
-    }
 
     return ErrorCode::BN_SUCCESS;
 }
@@ -45,8 +40,6 @@ ErrorCode Guild::DoUpdate()
 ErrorCode Guild::DoUninit()
 {
     BaseNodeLogInfo("GuildModule UnInit");
-    // 从 Zookeeper 服务发现中注销模块（进程级实例会在进程退出时自动清理）
-    ZkServiceDiscoveryMgr->DeregisterModuleInServiceDiscovery(this);
     return ErrorCode::BN_SUCCESS;
 }
 

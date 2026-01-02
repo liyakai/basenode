@@ -10,12 +10,12 @@ namespace BaseNode::ServiceDiscovery::Zookeeper
 
 void ZkServiceDiscoveryModule::Configure(IZkClientPtr zk_client,
                                          const ZkPaths &paths,
-                                         const std::string &process_id)
+                                         const std::string &service_hosts)
 {
     zk_client_  = std::move(zk_client);
     paths_      = paths;
-    process_id_ = process_id;
-    BaseNodeLogInfo("[ZkServiceDiscovery] Configure success. paths:%s, process_id:%s", paths.root.c_str(), process_id.c_str());
+    service_hosts_ = service_hosts;
+    BaseNodeLogInfo("[ZkServiceDiscovery] Configure success. paths:%s, service_hosts:%s", paths.root.c_str(), service_hosts.c_str());
 }
 
 ErrorCode ZkServiceDiscoveryModule::DoInit()
@@ -28,7 +28,7 @@ ErrorCode ZkServiceDiscoveryModule::DoInit()
         return ErrorCode::BN_INVALID_ARGUMENTS;
     }
 
-    registry_ = std::make_shared<ZkServiceRegistry>(zk_client_, paths_, process_id_);
+    registry_ = std::make_shared<ZkServiceRegistry>(zk_client_, paths_, service_hosts_);
     if (!registry_->Init())
     {
         BaseNodeLogError("[ZkServiceDiscovery] ZkServiceRegistry Init failed");
@@ -39,14 +39,6 @@ ErrorCode ZkServiceDiscoveryModule::DoInit()
     load_balancer_ = std::make_shared<ZoneAwareLoadBalancer>();
     discovery_client_ = std::make_shared<DefaultDiscoveryClient>(
         discovery_, load_balancer_, std::chrono::seconds(5));
-
-    BaseNodeLogInfo("[ZkServiceDiscovery] Init success");
-    return ErrorCode::BN_SUCCESS;
-}
-
-ErrorCode ZkServiceDiscoveryModule::DoAfterAllModulesInit()
-{
-    BaseNodeLogInfo("[ZkServiceDiscovery] DoAfterAllModulesInit: registering process-level ServiceInstance");
 
     if (!registry_)
     {
@@ -63,7 +55,7 @@ ErrorCode ZkServiceDiscoveryModule::DoAfterAllModulesInit()
     process_instance.service_name = "basenode-process";
 
     // instance_id: 进程的唯一标识（使用 Configure 时传入的 process_id_）
-    process_instance.instance_id = process_id_;
+    process_instance.instance_id = service_hosts_;
 
     // host/port: 进程对外提供 RPC 服务的监听地址
     // TODO: 从 Network 模块或配置读取实际监听地址
@@ -93,6 +85,15 @@ ErrorCode ZkServiceDiscoveryModule::DoAfterAllModulesInit()
                     process_instance.instance_id.c_str(),
                     process_instance.host.c_str(),
                     process_instance.port);
+
+    return ErrorCode::BN_SUCCESS;
+}
+
+ErrorCode ZkServiceDiscoveryModule::DoAfterAllModulesInit()
+{
+    BaseNodeLogInfo("[ZkServiceDiscovery] DoAfterAllModulesInit: registering process-level ServiceInstance");
+
+    
 
     return ErrorCode::BN_SUCCESS;
 }
@@ -184,6 +185,7 @@ extern "C" SO_EXPORT_SYMBOL void SO_EXPORT_FUNC_INIT()
     // TODO: 这些配置应该从配置文件或环境变量中读取
     std::string zk_hosts = "127.0.0.1:2181";  // 示例：实际应从配置读取
     std::string process_id = "basenode-process-" + std::to_string(getpid());  // 示例：实际应从配置读取
+    std::string service_hosts = "127.0.0.1:9527";
     ZkPaths paths{"/basenode"};  // 示例：实际应从配置读取
     
     // 创建真实的 Zookeeper 客户端并连接
@@ -204,7 +206,7 @@ extern "C" SO_EXPORT_SYMBOL void SO_EXPORT_FUNC_INIT()
         return;
     }
     
-    ZkServiceDiscoveryMgr->Configure(zk_client, paths, process_id);
+    ZkServiceDiscoveryMgr->Configure(zk_client, paths, service_hosts);
     ZkServiceDiscoveryMgr->Init();
 }
 
@@ -216,6 +218,32 @@ extern "C" SO_EXPORT_SYMBOL void SO_EXPORT_FUNC_UPDATE()
 extern "C" SO_EXPORT_SYMBOL void SO_EXPORT_FUNC_UNINIT()
 {
     ZkServiceDiscoveryMgr->UnInit();
+}
+
+// 全局单例实例，用于实现 GetModuleZkRegistryInstance()
+static BaseNode::IModuleZkRegistry* g_module_zk_registry_instance = nullptr;
+
+// 实现 IModuleZkRegistry 接口的全局函数
+// 使用 SO_EXPORT_SYMBOL 确保符号在所有模块间共享
+extern "C" SO_EXPORT_SYMBOL BaseNode::IModuleZkRegistry* GetModuleZkRegistryInstance()
+{
+    if (!g_module_zk_registry_instance)
+    {
+        // 在 ZkServiceDiscoveryModule 初始化后创建
+        auto* zk_module = ZkServiceDiscoveryMgr;
+        if (zk_module)
+        {
+            // 使用静态变量确保生命周期
+            static ModuleZkRegistryImpl impl(zk_module);
+            g_module_zk_registry_instance = &impl;
+            BaseNodeLogInfo("[ZkServiceDiscovery] GetModuleZkRegistryInstance: created ModuleZkRegistryImpl instance");
+        }
+        else
+        {
+            BaseNodeLogWarn("[ZkServiceDiscovery] GetModuleZkRegistryInstance: ZkServiceDiscoveryMgr is null");
+        }
+    }
+    return g_module_zk_registry_instance;
 }
 
 } // namespace BaseNode::ServiceDiscovery::Zookeeper
