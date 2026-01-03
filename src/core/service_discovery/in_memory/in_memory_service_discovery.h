@@ -19,16 +19,16 @@ public:
     {
     }
 
-    InstanceList GetInstances(const std::string &service_name) override
+    InstanceList GetServiceInstances(const std::string &service_name) override
     {
         if (!registry_)
         {
             return {};
         }
-        return registry_->GetInstances(service_name);
+        return registry_->GetServiceInstances(service_name);
     }
 
-    void Watch(const std::string &service_name,
+    void WatchServiceInstances(const std::string &service_name,
                InstanceChangeCallback cb) override
     {
         // 纯内存实现暂不做主动推送，先立即回调一次当前视图
@@ -36,7 +36,7 @@ public:
         {
             return;
         }
-        cb(service_name, GetInstances(service_name));
+        cb(service_name, GetServiceInstances(service_name));
 
         // TODO: 如果后续改为真实注册中心，可以在这里注册 Watch 回调
     }

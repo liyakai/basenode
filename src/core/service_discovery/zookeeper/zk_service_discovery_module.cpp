@@ -108,6 +108,15 @@ ErrorCode ZkServiceDiscoveryModule::DoUpdate()
 ErrorCode ZkServiceDiscoveryModule::DoUninit()
 {
     BaseNodeLogInfo("[ZkServiceDiscovery] UnInit");
+    
+    // 在重置资源之前，先完成自己的 ZK 注销
+    // 因为 IModule::UnInit() 会在 DoUninit() 之后才调用 ZK 注销，
+    // 但此时 zk_client_ 和 registry_ 已经被重置了
+    if (zk_client_ && registry_)
+    {
+        DeregisterModuleInServiceDiscovery(this);
+    }
+    
     discovery_client_.reset();
     load_balancer_.reset();
     discovery_.reset();
@@ -186,58 +195,197 @@ bool ZkServiceDiscoveryModule::RegisterModuleInServiceDiscovery(BaseNode::IModul
     return true;
 }
 
+// 递归删除 ZK 节点的辅助函数
+static bool RecursiveDelete(IZkClient* zk_client, const std::string& path)
+{
+    if (!zk_client || path.empty())
+    {
+        BaseNodeLogWarn("[ZkServiceDiscoveryModule] RecursiveDelete: invalid parameters, path: %s", path.c_str());
+        return false;
+    }
+
+    // 获取子节点列表
+    std::vector<std::string> children = zk_client->GetChildren(path);
+    
+    // 如果节点不存在（GetChildren 返回空且节点不存在），直接返回成功
+    // 注意：GetChildren 在节点不存在时可能返回空列表，但 Delete 会正确处理 ZNONODE 错误
+    // 这里我们记录信息，但继续执行删除操作，让 Delete 方法处理节点不存在的情况
+    if (children.empty())
+    {
+        BaseNodeLogInfo("[ZkServiceDiscoveryModule] RecursiveDelete: path %s has no children (may not exist)", path.c_str());
+    }
+    else
+    {
+        BaseNodeLogInfo("[ZkServiceDiscoveryModule] RecursiveDelete: path %s has %zu children", path.c_str(), children.size());
+    }
+    
+    // 先递归删除所有子节点
+    bool all_children_deleted = true;
+    for (const auto& child : children)
+    {
+        std::string child_path = path;
+        if (path.back() != '/')
+        {
+            child_path += "/";
+        }
+        child_path += child;
+        
+        if (!RecursiveDelete(zk_client, child_path))
+        {
+            BaseNodeLogWarn("[ZkServiceDiscoveryModule] RecursiveDelete: failed to delete child node: %s", child_path.c_str());
+            all_children_deleted = false;
+            // 继续删除其他子节点，不立即返回
+        }
+    }
+    
+    // 再次检查子节点，确保所有子节点都已删除
+    // 注意：如果节点不存在，GetChildren 可能返回空列表或失败，这是正常的
+    children = zk_client->GetChildren(path);
+    if (!children.empty())
+    {
+        BaseNodeLogWarn("[ZkServiceDiscoveryModule] RecursiveDelete: path %s still has %zu children after deletion attempt, cannot delete parent", 
+                       path.c_str(), children.size());
+        return false;
+    }
+    
+    // 删除当前节点
+    bool result = zk_client->Delete(path);
+    if (result)
+    {
+        BaseNodeLogInfo("[ZkServiceDiscoveryModule] RecursiveDelete: successfully deleted node: %s", path.c_str());
+    }
+    else
+    {
+        BaseNodeLogWarn("[ZkServiceDiscoveryModule] RecursiveDelete: failed to delete node: %s", path.c_str());
+    }
+    return result;
+}
+
 bool ZkServiceDiscoveryModule::DeregisterModuleInServiceDiscovery(BaseNode::IModule *module)
 {
-    if (!registry_ || !module)
+    if (!module)
     {
+        BaseNodeLogError("[ZkServiceDiscoveryModule] DeregisterModuleInServiceDiscovery: module is null");
         return false;
     }
+    
+    // 防御性检查：如果 zk_client_ 或 registry_ 已经被重置，说明资源已经被清理
+    // 如果这是 ZkServiceDiscoveryModule 自己，说明已经在 DoUninit() 中注销过了，返回 true
+    // 如果是其他模块，说明 ZkServiceDiscoveryModule 已经注销，无法为其他模块注销，返回 false
+    if (!zk_client_ || !registry_)
+    {
+        // 检查是否是 ZkServiceDiscoveryModule 自己
+        if (module == this)
+        {
+            BaseNodeLogInfo("[ZkServiceDiscoveryModule] DeregisterModuleInServiceDiscovery: ZkServiceDiscoveryModule itself "
+                           "has already been deregistered in DoUninit(), skip duplicate deregistration");
+            return true;
+        }
+        else
+        {
+            BaseNodeLogWarn("[ZkServiceDiscoveryModule] DeregisterModuleInServiceDiscovery: zk_client_ or registry_ is null, "
+                           "module (id: %u, class: %s) cannot be deregistered, ZkServiceDiscoveryModule resources already cleaned up",
+                           module->GetModuleId(), module->GetModuleClassName().c_str());
+            return false;
+        }
+    }
+    
     const auto module_id_str = module->GetModuleClassName();
-    const auto module_path   = paths_.ModulePath(module_id_str);
-    // 简单删除模块路径整棵子树（具体实现时可递归删除）
-    zk_client_->Delete(module_path);
-    return true;
-
-    ServiceInstance service_instance;
-    service_instance.service_name = module->GetModuleClassName();
-
-    int result = registry_->DeRegisterService(service_instance);
-    if(!result)
+    
+    // 获取模块的所有 RPC handler keys
+    auto handler_keys = module->GetAllServiceHandlerKeys();
+    
+    // 如果模块没有服务，说明注册时没有创建任何节点，直接返回成功
+    if (handler_keys.empty())
     {
-        BaseNodeLogError("[ZkServiceDiscoveryModule] DeregisterModuleInServiceDiscovery: failed to deregister service instance. service_instance:%s."
-            , service_instance.SerializeInstance().c_str());
+        BaseNodeLogInfo("[ZkServiceDiscoveryModule] DeregisterModuleInServiceDiscovery: module (id: %u, class: %s) has no services, "
+                       "no ZK nodes were created during registration, skip deregistration",
+                       module->GetModuleId(), module_id_str.c_str());
+        return true;
+    }
+    
+    // 使用与注册时相同的路径结构：/basenode/{host}:{port}/{module_name}
+    // 注意：注册时使用的是硬编码的 "127.0.0.1:9000"，所以注销时也必须使用相同的值
+    // TODO: 应该从配置或 Network 模块获取实际的 host:port，确保注册和注销使用相同的值
+    const std::string host = "127.0.0.1";
+    const uint32_t port = 9000;
+    const std::string host_port_str = host + ":" + std::to_string(port);
+    const auto host_port = paths_.BaseNodeRoot() + "/" + host_port_str;
+    const auto module_path = host_port + "/" + module_id_str;
+    
+    // 先注销该模块注册的所有服务实例（这些是 ephemeral 节点，会自动删除）
+    // 然后再删除模块目录（持久节点，需要手动删除）
+    bool all_deregistered = true;
+    
+    for (auto key : handler_keys)
+    {
+        BaseNode::ServiceDiscovery::ServiceInstance service_instance;
+        service_instance.service_name = std::to_string(key);
+        service_instance.instance_id = std::to_string(MD5Hash32Constexpr(std::to_string(key)));
+        service_instance.module_name = module->GetModuleClassName();
+        // 使用与注册时相同的 host 和 port
+        service_instance.host = host;
+        service_instance.port = port;
+        
+        if (!registry_->DeRegisterService(service_instance))
+        {
+            BaseNodeLogWarn("[ZkServiceDiscoveryModule] DeregisterModuleInServiceDiscovery: failed to deregister service instance. service_instance:%s.",
+                service_instance.SerializeInstance().c_str());
+            all_deregistered = false;
+        }
+    }
+    
+    // 递归删除模块路径及其所有子节点（持久节点需要手动删除）
+    BaseNodeLogInfo("[ZkServiceDiscoveryModule] DeregisterModuleInServiceDiscovery: attempting to delete module path: %s", module_path.c_str());
+    bool delete_result = RecursiveDelete(zk_client_.get(), module_path);
+    BaseNodeLogInfo("[ZkServiceDiscoveryModule] DeregisterModuleInServiceDiscovery: delete module path result: %s, path: %s", 
+                   delete_result ? "success" : "failed", module_path.c_str());
+    
+    // 检查 host_port 目录是否为空，如果为空则删除
+    // 注意：只有当该目录下没有其他模块时，才会删除它
+    std::vector<std::string> remaining_modules = zk_client_->GetChildren(host_port);
+    if (remaining_modules.empty())
+    {
+        // host_port 目录为空，删除它
+        bool host_port_deleted = zk_client_->Delete(host_port);
+        if (host_port_deleted)
+        {
+            BaseNodeLogInfo("[ZkServiceDiscoveryModule] DeregisterModuleInServiceDiscovery: deleted empty host_port directory: %s", host_port.c_str());
+        }
+        else
+        {
+            BaseNodeLogWarn("[ZkServiceDiscoveryModule] DeregisterModuleInServiceDiscovery: failed to delete empty host_port directory: %s", host_port.c_str());
+        }
+    }
+    else
+    {
+        BaseNodeLogInfo("[ZkServiceDiscoveryModule] DeregisterModuleInServiceDiscovery: host_port directory %s still has %zu modules, not deleted", 
+                       host_port.c_str(), remaining_modules.size());
+    }
+    
+    if (delete_result && all_deregistered)
+    {
+        BaseNodeLogInfo("[ZkServiceDiscoveryModule] DeregisterModuleInServiceDiscovery: successfully deregistered module (id: %u, class: %s) from ZK",
+            module->GetModuleId(), module_id_str.c_str());
+        return true;
+    }
+    else
+    {
+        BaseNodeLogWarn("[ZkServiceDiscoveryModule] DeregisterModuleInServiceDiscovery: partially deregistered module (id: %u, class: %s) from ZK",
+            module->GetModuleId(), module_id_str.c_str());
         return false;
-    }    
-    BaseNodeLogInfo("[ZkServiceDiscoveryModule] DeregisterModuleInServiceDiscovery: deregistered service instance. service_name:%s, module_path:%s."
-        , service_instance.service_name.c_str(), module_path.c_str());
-    return true;
+    }
 }
 
-std::optional<ServiceInstance>
-ZkServiceDiscoveryModule::ChooseInstance(const std::string &service_name,
-                                         const RequestContext &ctx)
+void ZkServiceDiscoveryModule::WatchServiceInstances(const std::string &service_name,
+                ServiceDiscovery::InstanceChangeCallback cb)
 {
-    if (!discovery_client_)
+    if (!discovery_)
     {
-        return std::nullopt;
+        BaseNodeLogError("[ZkServiceDiscoveryModule] WatchServiceInstances: discovery_ is null");
+        return;
     }
-    return discovery_client_->ChooseInstance(service_name, ctx);
-}
-
-IInvokerPtr ZkServiceDiscoveryModule::CreateInvoker(DoCallFunc              do_call,
-                                                    int                     max_retries,
-                                                    int                     failure_threshold,
-                                                    std::chrono::milliseconds open_interval)
-{
-    if (!discovery_client_ || !do_call)
-    {
-        return nullptr;
-    }
-
-    auto simple   = std::make_shared<SimpleInvoker>(discovery_client_, std::move(do_call));
-    auto retry    = std::make_shared<RetryInvoker>(simple, max_retries);
-    auto circuit  = std::make_shared<CircuitBreakerInvoker>(retry, failure_threshold, open_interval);
-    return circuit;
+    discovery_->WatchServiceInstances(service_name, std::move(cb));
 }
 
 // 插件导出符号，方便通过 PluginLoadManager 装载
@@ -284,7 +432,7 @@ extern "C" SO_EXPORT_SYMBOL void SO_EXPORT_FUNC_UNINIT()
 
 // 全局单例实例，用于实现 GetModuleZkRegistryInstance()
 static BaseNode::IModuleZkRegistry* g_module_zk_registry_instance = nullptr;
-
+static BaseNode::IModuleZkDiscovery* g_module_zk_discovery_instance = nullptr;
 // 实现 IModuleZkRegistry 接口的全局函数
 // 使用 SO_EXPORT_SYMBOL 确保符号在所有模块间共享
 extern "C" SO_EXPORT_SYMBOL BaseNode::IModuleZkRegistry* GetModuleZkRegistryInstance()
@@ -306,6 +454,33 @@ extern "C" SO_EXPORT_SYMBOL BaseNode::IModuleZkRegistry* GetModuleZkRegistryInst
         }
     }
     return g_module_zk_registry_instance;
+}
+
+// 实现 IModuleZkDiscovery 接口的全局函数
+// 使用 SO_EXPORT_SYMBOL 确保符号在所有模块间共享
+extern "C" SO_EXPORT_SYMBOL BaseNode::IModuleZkDiscovery* GetModuleZkDiscoveryInstance()
+{
+    if (!g_module_zk_discovery_instance)
+    {
+        // 在 ZkServiceDiscoveryModule 初始化后创建
+        auto* zk_module = ZkServiceDiscoveryMgr;
+        if (zk_module)
+        {
+            // 使用静态变量确保生命周期
+            static ModuleZkDiscoveryImpl impl(zk_module);
+            g_module_zk_discovery_instance = &impl;
+            BaseNodeLogInfo("[ZkServiceDiscovery] GetModuleZkDiscoveryInstance: created ModuleZkDiscoveryImpl instance");
+        }
+        else
+        {
+            BaseNodeLogWarn("[ZkServiceDiscovery] GetModuleZkDiscoveryInstance: ZkServiceDiscoveryMgr is null");
+        }
+    }
+    else
+    {
+        BaseNodeLogWarn("[ZkServiceDiscovery] GetModuleZkDiscoveryInstance: ModuleZkDiscoveryImpl instance already exists");
+    }
+    return g_module_zk_discovery_instance;
 }
 
 } // namespace BaseNode::ServiceDiscovery::Zookeeper

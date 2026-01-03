@@ -1,9 +1,8 @@
 #pragma once
 
 #include "module/module_interface.h"
-#include "module/module_zk_registry.h"
+#include "module/module_zk.h"
 #include "service_discovery/service_discovery_core.h"
-#include "service_discovery/invoker.h"
 #include "service_discovery/zookeeper/zk_client.h"
 #include "service_discovery/zookeeper/zk_paths.h"
 #include "service_discovery/zookeeper/zk_service_registry.h"
@@ -43,17 +42,9 @@ public:
     bool RegisterModuleInServiceDiscovery(BaseNode::IModule *module);
     bool DeregisterModuleInServiceDiscovery(BaseNode::IModule *module);
 
-    /// 基于 RequestContext 进行服务发现
-    std::optional<ServiceInstance>
-    ChooseInstance(const std::string &service_name,
-                   const RequestContext &ctx);
-
-    /// 构建带重试 + 熔断的 Invoker
-    IInvokerPtr
-    CreateInvoker(DoCallFunc              do_call,
-                  int                     max_retries,
-                  int                     failure_threshold,
-                  std::chrono::milliseconds open_interval);
+    /// 监听服务实例变化
+    void WatchServiceInstances(const std::string &service_name,
+                ServiceDiscovery::InstanceChangeCallback cb);
 
 protected:
     ErrorCode DoInit() override;
@@ -108,6 +99,42 @@ public:
 private:
     ZkServiceDiscoveryModule* zk_module_;
 };
+
+
+/**
+ * @brief IModuleZkRegistry 接口的实现类
+ * 将模块注册请求转发给 ZkServiceDiscoveryModule
+ */
+ class ModuleZkDiscoveryImpl final : public BaseNode::IModuleZkDiscovery
+ {
+ public:
+     explicit ModuleZkDiscoveryImpl(ZkServiceDiscoveryModule* zk_module)
+         : zk_module_(zk_module)
+     {
+     }
+ 
+     BaseNode::ServiceDiscovery::InstanceList GetServiceInstances(const std::string &service_name) override
+     {
+         if (!zk_module_)
+         {
+             return InstanceList();
+         }
+         return BaseNode::ServiceDiscovery::InstanceList();
+     }
+ 
+     void WatchServiceInstances(const std::string &service_name,
+                ServiceDiscovery::InstanceChangeCallback cb) override
+     {
+         if (!zk_module_)
+         {
+             return;
+         }
+         return zk_module_->WatchServiceInstances(service_name, cb);
+     }
+ 
+ private:
+     ZkServiceDiscoveryModule* zk_module_;
+ };
 
 } // namespace BaseNode::ServiceDiscovery::Zookeeper
 

@@ -1,6 +1,6 @@
 #pragma once
 #include "module_event.h"
-#include "module_zk_registry.h"
+#include "module_zk.h"
 #include "utils/basenode_def_internal.h"
 #include "tools/ringbuffer.h"
 #include "tools/function_traits.h"

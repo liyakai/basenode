@@ -17,12 +17,27 @@ bool ZkServiceRegistry::RegistService(const BaseNode::ServiceDiscovery::ServiceI
         BaseNodeLogError("[ZkServiceRegistry] Invalid zk_client_");
         return false;
     }
-    const auto service_path = paths_.ServicePath(instance.service_name);
-    if (!zk_client_->EnsurePath(service_path))
+    if(!zk_client_->EnsurePath(paths_.BaseNodeRoot()))
     {
-        BaseNodeLogError("[ZkServiceRegistry] EnsurePath service path failed. service_path:%s.", service_path.c_str());
+        BaseNodeLogError("[ZkServiceRegistry] EnsurePath base node root path failed. base node root path:%s.", paths_.BaseNodeRoot().c_str());
         return false;
     }
+
+    // 注册进程
+    const auto host_port = paths_.BaseNodeRoot() + "/" + instance.host + ":" + std::to_string(instance.port);
+    if(!zk_client_->EnsurePath(host_port))
+    {
+        BaseNodeLogError("[ZkServiceRegistry] EnsurePath host_port path failed. host_port:%s.", host_port.c_str());
+        return false;
+    }
+
+    const auto module_path = host_port + "/" + instance.module_name;
+    if (!zk_client_->EnsurePath(module_path))
+    {
+        BaseNodeLogError("[ZkServiceRegistry] EnsurePath module path failed. module_path:%s.", module_path.c_str());
+        return false;
+    }
+    const auto service_path = module_path + "/" + instance.service_name;
     const auto service_data = instance.SerializeInstance();
     bool result = zk_client_->CreateEphemeral(service_path, service_data) || zk_client_->SetData(service_path, service_data);
     BaseNodeLogInfo("[ZkServiceRegistry] Register service to zk success. service_path:%s, service_data:%s.", service_path.c_str(), service_data.c_str());
@@ -35,7 +50,10 @@ bool ZkServiceRegistry::DeRegisterService(const BaseNode::ServiceDiscovery::Serv
     {
         return false;
     }
-    const auto service_path = paths_.ServicePath(instance.service_name);
+    // 使用与注册时相同的路径结构：/basenode/{host}:{port}/{module_name}/{service_name}
+    const auto host_port = paths_.BaseNodeRoot() + "/" + instance.host + ":" + std::to_string(instance.port);
+    const auto module_path = host_port + "/" + instance.module_name;
+    const auto service_path = module_path + "/" + instance.service_name;
     bool result = zk_client_->Delete(service_path);
     BaseNodeLogInfo("[ZkServiceRegistry] DeRegisterService service from zk success. service_path:%s, result:%d.", service_path.c_str(), result);
     return result;

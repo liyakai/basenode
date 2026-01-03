@@ -22,6 +22,7 @@ struct ZkPaths
 
     explicit ZkPaths(std::string r) : root(std::move(r)) {}
 
+    std::string BaseNodeRoot() const { return root; }
     std::string ProcessesRoot() const { return root + "/processes"; }
     std::string ModulesRoot() const { return root + "/modules"; }
     std::string ServicesRoot() const { return root + "/services"; }

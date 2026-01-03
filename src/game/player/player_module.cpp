@@ -284,27 +284,6 @@ ToolBox::coro::Task<std::monostate> Player::GetGuildInfoByServiceDiscovery(uint6
         co_return std::monostate{};
     }
 
-    // 1. 通过 Zookeeper 服务发现选择一个 Guild 实例（支持多机房就近路由）
-    RequestContext ctx;
-    ctx.caller_zone = "sh";
-    ctx.caller_idc  = "sh01";
-    ctx.labels["guild_id"] = std::to_string(guild_id); // 示例：如果以后做一致性哈希，可以用这个
-
-    auto inst_opt = ZkServiceDiscoveryMgr->ChooseInstance("guild-service", ctx);
-    if (!inst_opt)
-    {
-        BaseNodeLogError("PlayerModule GetGuildInfoByServiceDiscovery: no guild-service instance found");
-        co_return std::monostate{};
-    }
-
-    const auto &inst = *inst_opt;
-    BaseNodeLogInfo("PlayerModule GetGuildInfoByServiceDiscovery: choose instance_id=%s host=%s port=%u zone=%s idc=%s",
-                    inst.instance_id.c_str(),
-                    inst.host.c_str(),
-                    inst.port,
-                    inst.metadata.count("zone") ? inst.metadata.at("zone").c_str() : "",
-                    inst.metadata.count("idc") ? inst.metadata.at("idc").c_str() : "");
-
     // 2. 目前仍然通过模块内 RPC 调用 Guild（同进程），后续可以根据 inst.host/port 做跨进程路由
     try
     {

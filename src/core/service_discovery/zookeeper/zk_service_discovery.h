@@ -25,16 +25,14 @@ public:
     {
     }
 
-    InstanceList GetInstances(const std::string &service_name) override;
+    InstanceList GetServiceInstances(const std::string &service_name) override;
 
-    void Watch(const std::string &service_name,
+    void WatchServiceInstances(const std::string &service_name,
                InstanceChangeCallback cb) override;
 
 private:
     BaseNode::ServiceDiscovery::ServiceInstance
-    ParseInstance(const std::string &service_name,
-                  const std::string &instance_id,
-                  const std::string &data) const;
+    ParseServiceInstance(const std::string &data) const;
 
 private:
     IZkClientPtr zk_client_;

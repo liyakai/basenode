@@ -79,7 +79,7 @@ public:
     }
 
     /// 提供给同进程的 ServiceDiscovery 使用
-    std::vector<ServiceInstance> GetInstances(const std::string &service_name) const
+    InstanceList GetServiceInstances(const std::string &service_name) const
     {
         std::lock_guard<std::mutex> lock(mutex_);
         auto                        it = services_.find(service_name);
@@ -92,7 +92,7 @@ public:
 
 private:
     mutable std::mutex mutex_;
-    std::unordered_map<std::string, std::vector<ServiceInstance>> services_;
+    std::unordered_map<std::string, InstanceList> services_;
 };
 
 } // namespace BaseNode::ServiceDiscovery
