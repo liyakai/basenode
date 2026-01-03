@@ -59,8 +59,6 @@ private:
 
     ZkServiceRegistryPtr   registry_;
     ZkServiceDiscoveryPtr  discovery_;
-    ILoadBalancerPtr       load_balancer_;
-    IDiscoveryClientPtr    discovery_client_;
 };
 
 /// 全局单例访问宏（与 NetworkMgr 风格保持一致）

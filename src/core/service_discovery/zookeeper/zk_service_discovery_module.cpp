@@ -37,9 +37,6 @@ ErrorCode ZkServiceDiscoveryModule::DoInit()
     }
 
     discovery_ = std::make_shared<ZkServiceDiscovery>(zk_client_, paths_);
-    load_balancer_ = std::make_shared<ZoneAwareLoadBalancer>();
-    discovery_client_ = std::make_shared<DefaultDiscoveryClient>(
-        discovery_, load_balancer_, std::chrono::seconds(5));
 
     if (!registry_)
     {
@@ -117,8 +114,6 @@ ErrorCode ZkServiceDiscoveryModule::DoUninit()
         DeregisterModuleInServiceDiscovery(this);
     }
     
-    discovery_client_.reset();
-    load_balancer_.reset();
     discovery_.reset();
     registry_.reset();
     zk_client_.reset();

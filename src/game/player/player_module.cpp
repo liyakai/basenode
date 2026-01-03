@@ -274,7 +274,6 @@ ToolBox::coro::Task<std::monostate> Player::GetGuildInfoByPB(uint64_t guild_id)
 ToolBox::coro::Task<std::monostate> Player::GetGuildInfoByServiceDiscovery(uint64_t guild_id)
 {
     using errcode::ErrCode;
-    using BaseNode::ServiceDiscovery::RequestContext;
 
     BaseNodeLogInfo("PlayerModule GetGuildInfoByServiceDiscovery: guild_id: %llu", guild_id);
 
