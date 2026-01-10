@@ -4,8 +4,6 @@
 //  - ServiceInstance        : 服务实例领域模型
 //  - IServiceRegistry       : 注册接口
 //  - IServiceDiscovery      : 发现接口
-//  - RequestContext / ILoadBalancer / ZoneAwareLoadBalancer
-//  - IDiscoveryClient / DefaultDiscoveryClient
 
 #include <atomic>
 #include <functional>
