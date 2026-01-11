@@ -1,0 +1,1 @@
+../emittermanip.h
