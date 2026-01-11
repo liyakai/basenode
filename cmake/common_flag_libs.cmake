@@ -98,6 +98,7 @@ endfunction()
 function(CONFIGURE_CORE_LIBRARY target_name)
     target_include_directories(${target_name} PUBLIC
         ${ROOT_PATH}/3rdparty/toolbox/include
+        ${ROOT_PATH}/3rdparty/nlohmann_json
         ${SRC_CORE_PATH}
         ${SRC_CORE_PATH}/module
     )
@@ -147,6 +148,9 @@ function(CONFIGURE_MODULE_LIBRARY target_name source_dir)
         ${source_dir}
         ${source_dir}/..
         ${ROOT_PATH}/3rdparty/toolbox/include
+        ${ROOT_PATH}/3rdparty/nlohmann_json
+        ${ROOT_PATH}/3rdparty/yaml_cpp/include
+        ${ROOT_PATH}/3rdparty/pugixml
         ${SRC_CORE_PATH}
         ${SRC_CORE_PATH}/module
         ${SRC_CORE_PATH}/protobuf/pb_out
@@ -280,7 +284,7 @@ endfunction()
 
 # 定义基础库列表（所有模块默认链接的基础库）
 # 这些库会被自动链接到所有通过 ADD_SHARED_LIBRARY_FROM_DIR 创建的模块
-set(BASENODE_BASE_LIBS service_discovery CACHE INTERNAL "Base libraries automatically linked to all modules")
+set(BASENODE_BASE_LIBS config service_discovery CACHE INTERNAL "Base libraries automatically linked to all modules")
 
 # 从指定目录生成共享库
 # 参数:
@@ -288,6 +292,7 @@ set(BASENODE_BASE_LIBS service_discovery CACHE INTERNAL "Base libraries automati
 #   source_dir - 源文件目录路径
 #   [PROTOBUF] - 可选参数，如果提供则自动链接 protobuf 库
 #   [ZOOKEEPER] - 可选参数，如果提供则自动链接 zookeeper 库
+#   [YAML_CPP] - 可选参数，如果提供则自动链接 yaml-cpp 库
 #   [NO_BASE_LIBS] - 可选参数，如果提供则不自动链接基础库
 #   [EXPORT_SYMBOLS] - 可选参数，如果提供则导出所有符号（用于基础库，供其他模块使用）
 #   [DEPENDS lib1 lib2 ...] - 可选，指定需要链接的其他库（使用 PUBLIC 链接）
@@ -305,21 +310,24 @@ set(BASENODE_BASE_LIBS service_discovery CACHE INTERNAL "Base libraries automati
 #   EXPORT_SYMBOLS - 可选，如果提供则导出所有符号（用于基础库，确保 vtable 等符号在运行时可见）
 #   DEPENDS lib1 lib2 ... - 可选，指定需要链接的其他库（使用 PUBLIC 链接）
 function(ADD_SHARED_LIBRARY_FROM_DIR name source_dir)
-    # 解析参数：PROTOBUF、ZOOKEEPER、NO_BASE_LIBS、EXPORT_SYMBOLS 和 DEPENDS
+    # 解析参数：PROTOBUF、ZOOKEEPER、YAML_CPP、NO_BASE_LIBS、EXPORT_SYMBOLS 和 DEPENDS
     set(need_protobuf FALSE)
     set(need_zookeeper FALSE)
+    set(need_yaml_cpp FALSE)
     set(no_base_libs FALSE)
     set(export_symbols FALSE)
     set(depends_libs "")
     
     set(current_keyword "")
     foreach(arg ${ARGN})
-        if(arg MATCHES "^(PROTOBUF|ZOOKEEPER|NO_BASE_LIBS|EXPORT_SYMBOLS|DEPENDS)$")
+        if(arg MATCHES "^(PROTOBUF|ZOOKEEPER|YAML_CPP|NO_BASE_LIBS|EXPORT_SYMBOLS|DEPENDS)$")
             set(current_keyword ${arg})
             if(arg STREQUAL "PROTOBUF")
                 set(need_protobuf TRUE)
             elseif(arg STREQUAL "ZOOKEEPER")
                 set(need_zookeeper TRUE)
+            elseif(arg STREQUAL "YAML_CPP")
+                set(need_yaml_cpp TRUE)
             elseif(arg STREQUAL "NO_BASE_LIBS")
                 set(no_base_libs TRUE)
             elseif(arg STREQUAL "EXPORT_SYMBOLS")
@@ -335,6 +343,12 @@ function(ADD_SHARED_LIBRARY_FROM_DIR name source_dir)
     # 收集 module 目录的源文件，但排除 module_router.cpp 和 module_interface.cpp（它们在 basenode_core 中编译）
     AUX_SOURCE_DIRECTORY(${SRC_CORE_PATH}/module ${name}_TMP_MODULE_SRCS)
     list(FILTER ${name}_TMP_MODULE_SRCS EXCLUDE REGEX ".*module_(router|interface)\\.cpp$")
+    
+    # 如果是 config 模块，添加 pugixml.cpp
+    if(${name} STREQUAL "config")
+        list(APPEND ${name}_SRCS ${ROOT_PATH}/3rdparty/pugixml/pugixml.cpp)
+        message(STATUS "Added pugixml.cpp to config module")
+    endif()
     list(APPEND ${name}_SRCS ${${name}_TMP_MODULE_SRCS})
     message(STATUS "${name}_SRCS -> ${${name}_SRCS}")
     
@@ -372,6 +386,14 @@ function(ADD_SHARED_LIBRARY_FROM_DIR name source_dir)
             crypto
         )
         message(STATUS "Linked zookeeper library to ${name}")
+    endif()
+    
+    # 如果需要 yaml-cpp，直接链接 yaml-cpp 库
+    if(need_yaml_cpp)
+        set(YAML_CPP_ROOT ${ROOT_PATH}/3rdparty/yaml_cpp)
+        target_include_directories(${name} PRIVATE ${YAML_CPP_ROOT}/include)
+        target_link_libraries(${name} PRIVATE ${YAML_CPP_ROOT}/libs/libyaml-cpp.a)
+        message(STATUS "Linked yaml-cpp library to ${name}")
     endif()
     
     # 自动链接基础库（除非明确排除）

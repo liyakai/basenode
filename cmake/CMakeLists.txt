@@ -22,6 +22,8 @@ ADD_CORE_LIBRARY(basenode_core
 # 所有模块都链接 basenode_core，共享同一个 ModuleRouter 实例
 # 使用 PROTOBUF 参数自动链接 protobuf 库
 # ============================================================================
+# config 是基础库，使用 NO_BASE_LIBS 避免自己链接自己，使用 EXPORT_SYMBOLS 导出符号供其他模块使用，使用 YAML_CPP 链接 yaml-cpp 库
+ADD_SHARED_LIBRARY_FROM_DIR(config ${SRC_PATH}/core/config NO_BASE_LIBS EXPORT_SYMBOLS YAML_CPP)
 ADD_SHARED_LIBRARY_FROM_DIR(gatenode ${SRC_PATH}/framework/gatenode)
 # service_discovery 是基础库，使用 NO_BASE_LIBS 避免自己链接自己，使用 EXPORT_SYMBOLS 导出符号供其他模块使用，使用 ZOOKEEPER 链接 zookeeper 库
 ADD_SHARED_LIBRARY_FROM_DIR(service_discovery ${SRC_PATH}/core/service_discovery/zookeeper NO_BASE_LIBS EXPORT_SYMBOLS ZOOKEEPER)
