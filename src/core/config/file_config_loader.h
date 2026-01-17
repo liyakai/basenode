@@ -2,6 +2,7 @@
 
 #include "config_loader.h"
 #include "config_value.h"
+#include "utils/basenode_def_internal.h"
 #include <fstream>
 #include <sstream>
 #include <filesystem>
@@ -137,6 +138,30 @@ public:
 
         std::string base_dir = GetBaseDir(source);
         return ParseContentWithRef(content, base_dir);
+    }
+
+protected:
+    /**
+     * @brief 解析配置内容（实现基类纯虚函数）
+     * @param content JSON 内容
+     * @return 解析后的配置值
+     * 
+     * 注意：此方法不支持 $ref 引用，因为缺少 base_dir 信息。
+     * 实际使用时应通过 Load() 方法加载配置，它会自动处理 $ref。
+     */
+    ConfigValue ParseContent(const std::string& content) override
+    {
+        // 由于缺少 base_dir，无法处理 $ref，直接解析 JSON
+        // 实际使用时应通过 Load() 方法，它会调用 ParseContentWithRef
+        try
+        {
+            return ConfigValue(nlohmann::json::parse(content));
+        }
+        catch (const nlohmann::json::parse_error& e)
+        {
+            BaseNodeLogError("[JsonConfigLoaderWithRef] Parse error: %s", e.what());
+            return ConfigValue(std::in_place_type<nlohmann::json>);
+        }
     }
 
 private:

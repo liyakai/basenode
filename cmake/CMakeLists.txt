@@ -48,7 +48,13 @@ target_link_options(network PRIVATE
 ADD_EXECUTABLE_FROM_DIRS(basenode 
     ${SRC_PATH}/boot 
     ${SRC_PATH}/core/plugin_system 
-    LIBS dl pthread basenode_core
+    LIBS dl pthread basenode_core config
+)
+
+# 为可执行文件添加 core 目录和 yaml-cpp 到包含路径，以便访问 config 等模块的头文件
+target_include_directories(basenode PRIVATE 
+    ${SRC_CORE_PATH}
+    ${ROOT_PATH}/3rdparty/yaml_cpp/include
 )
 
 

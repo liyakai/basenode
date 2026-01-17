@@ -2,6 +2,7 @@
 #include "utils/basenode_def_internal.h"
 #include "tools/safe_call.h"
 #include "module/module_router.h"
+#include "config/config_manager.h"
 #include <string>
 #include <vector>
 #include <filesystem>
@@ -18,16 +19,61 @@ int PluginLoadManager::Init()
 {
     std::filesystem::path cwd = std::filesystem::current_path();
     std::string lib_dir = cwd.string() + "/lib";
+    std::vector<std::string> modules;
     
-    // 定义需要加载的模块列表（按加载顺序）
-    std::vector<std::string> modules = {
-        "libbasenode_core.so",      // 核心库必须最先加载，确保 ModuleRouter 符号在全局符号表中
-        "libgatenode.so",
-        "libservice_discovery.so",   // 服务发现模块需要在业务模块之前加载
-        "libplayer_module.so",
-        "libguild_module.so",
-        "libnetwork.so"
-    };
+    // 自动检测已加载的配置名称
+    // 支持通过不同配置文件加载不同的 .so 模块
+    std::vector<std::string> loaded_configs = ConfigMgr->GetLoadedConfigNames();
+    std::string config_name;
+    
+    if (loaded_configs.empty()) {
+        BaseNodeLogWarn("[PluginLoadManager] No config loaded, using default config name 'basenode'");
+        config_name = "basenode";
+    } else {
+        // 使用第一个已加载的配置（通常只有一个）
+        config_name = loaded_configs[0];
+        BaseNodeLogInfo("[PluginLoadManager] Using config name: %s", config_name.c_str());
+    }
+    
+    if (ConfigMgr->HasConfig(config_name)) {
+        // 动态构建配置路径：{config_name}.plugins.lib_dir
+        std::string lib_dir_path = config_name + ".plugins.lib_dir";
+        std::string config_lib_dir = ConfigMgr->Get<std::string>(config_name, lib_dir_path, "./lib");
+        if (!config_lib_dir.empty()) {
+            // 如果是相对路径，则基于当前工作目录
+            if (config_lib_dir[0] != '/') {
+                lib_dir = cwd.string() + "/" + config_lib_dir;
+            } else {
+                lib_dir = config_lib_dir;
+            }
+            BaseNodeLogInfo("[PluginLoadManager] Using lib_dir from config: %s", lib_dir.c_str());
+        }
+        
+        // 动态构建配置路径：{config_name}.plugins.modules
+        std::string modules_path = config_name + ".plugins.modules";
+        nlohmann::json modules_json = ConfigMgr->Get<nlohmann::json>(config_name, modules_path, nlohmann::json::array());
+        if (modules_json.is_array() && !modules_json.empty()) {
+            for (const auto& module : modules_json) {
+                if (module.is_string()) {
+                    modules.push_back(module.get<std::string>());
+                }
+            }
+            BaseNodeLogInfo("[PluginLoadManager] Loaded %zu modules from config '%s'", modules.size(), config_name.c_str());
+        }
+    }
+    
+    // 如果配置中没有模块列表，使用默认值
+    if (modules.empty()) {
+        BaseNodeLogWarn("[PluginLoadManager] No modules found in config, using default modules");
+        modules = {
+            "libbasenode_core.so",      // 核心库必须最先加载，确保 ModuleRouter 符号在全局符号表中
+            "libgatenode.so",
+            "libservice_discovery.so",   // 服务发现模块需要在业务模块之前加载
+            "libplayer_module.so",
+            "libguild_module.so",
+            "libnetwork.so"
+        };
+    }
     
     // 依次加载所有模块
     for (const auto& module : modules) {
@@ -36,8 +82,9 @@ int PluginLoadManager::Init()
             BaseNodeLogError("[PluginLoadManager] Failed to load module: %s", module_path.c_str());
             return -1;
         }
+        BaseNodeLogInfo("[PluginLoadManager] load module:%s", module.c_str());
     }
-
+    BaseNodeLogInfo("[PluginLoadManager] load all module done. size:%d", modules.size());
     AfterAllModulesInit_();
 
     return 0;
