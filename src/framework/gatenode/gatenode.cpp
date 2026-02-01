@@ -11,7 +11,7 @@ class PluginGate : public ToolBox::PluginInterface
 public:
     void pluginUpdate()
     {
-        BaseNodeLogInfo("PluginGate pluginUpdate");
+        // BaseNodeLogInfo("PluginGate pluginUpdate");
     };
 };
 

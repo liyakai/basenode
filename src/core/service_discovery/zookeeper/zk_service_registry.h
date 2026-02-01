@@ -8,6 +8,8 @@
 #include <memory>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
+#include <mutex>
 
 namespace BaseNode::ServiceDiscovery::Zookeeper
 {
@@ -25,55 +27,16 @@ class ZkServiceRegistry final : public BaseNode::ServiceDiscovery::IServiceRegis
 {
 public:
     ZkServiceRegistry(IZkClientPtr zk_client,
-                      ZkPaths      paths,
-                      std::string  service_hosts)
+                      ZkPaths      paths)
         : zk_client_(std::move(zk_client))
         , paths_(std::move(paths))
-        , service_hosts_(std::move(service_hosts))
     {
     }
 
     /**
      * @brief 初始化注册器，创建进程层级节点
      */
-    bool Init()
-    {
-        if (!zk_client_)
-        {
-            BaseNodeLogError("Invalid zk_client_");
-            return false;
-        }
-        BaseNodeLogInfo("Ready to EnsurePath in zookeeper. root:%s, ProcessesRoot:%s, ServicesRoot:%s."
-                        , paths_.root.c_str()
-                        , paths_.ProcessesRoot().c_str()
-                        , paths_.ServicesRoot().c_str()
-                    );
-        // // 确保基础路径存在（这些路径应该是持久节点，因为需要在它们下面创建子节点）
-        // zk_client_->EnsurePath(paths_.root);
-        // zk_client_->EnsurePath(paths_.ProcessesRoot());
-        // zk_client_->EnsurePath(paths_.ServicesRoot());
-
-        // // 注意：持久节点不会自动清理，需要在进程退出时手动清理（在 Uninit 中处理）
-        // const auto process_path = paths_.ProcessPath(service_hosts_);
-        // BaseNodeLogInfo("Ready to create process path in zookeeper. process_path:%s (persistent, not ephemeral).", process_path.c_str());
-        
-        // // 创建持久进程节点（如果已存在则忽略）
-        // if (!zk_client_->EnsurePath(process_path))
-        // {
-        //     BaseNodeLogError("Failed to create process path: %s", process_path.c_str());
-        //     return false;
-        // }
-        
-        // // 创建 /modules 持久节点路径
-        // const std::string modules_path = paths_.ProcessPath(service_hosts_) + "/modules";
-        // if (!zk_client_->EnsurePath(modules_path))
-        // {
-        //     BaseNodeLogError("Failed to create modules path: %s", modules_path.c_str());
-        //     return false;
-        // }
-        
-        return true;
-    }
+    bool Init();
 
     // ------------ IServiceRegistry 接口：服务实例注册 ------------ //
 
@@ -83,10 +46,33 @@ public:
 
     bool RenewService(const BaseNode::ServiceDiscovery::ServiceInstance &instance) override;
 
+    /**
+     * @brief 清理孤儿节点（没有子临时节点的IP/模块节点）
+     * @param base_path 要清理的根路径，默认为 BaseNodeRoot
+     */
+    void CleanupOrphanNodes(const std::string &base_path = "");
+
+    /**
+     * @brief 清理当前会话创建的所有节点
+     */
+    void CleanupSessionNodes();
+
+private:
+    /**
+     * @brief 递归清理空节点（没有子节点的节点）
+     * @param path 要清理的路径
+     * @return 如果节点被删除返回 true
+     */
+    bool RecursiveCleanupEmptyNode(const std::string &path);
+
 private:
     IZkClientPtr zk_client_;
     ZkPaths      paths_;
-    std::string  service_hosts_;
+    
+    // 跟踪当前会话创建的节点路径
+    std::mutex tracked_nodes_mutex_;
+    std::unordered_set<std::string> tracked_host_port_nodes_;  // 跟踪的IP:Port节点
+    std::unordered_set<std::string> tracked_module_nodes_;     // 跟踪的模块节点
 };
 
 using ZkServiceRegistryPtr = std::shared_ptr<ZkServiceRegistry>;

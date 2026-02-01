@@ -1,0 +1,66 @@
+{
+    "basenode_guild": {
+        "process": {
+            "process_id": "basenode-process-1",
+            "server_name": "basenode_guild",
+            "server_type": "guild",
+            "work_dir": "./"
+        },
+        "plugins": {
+            "lib_dir": "./lib",
+            "modules": [
+                "libbasenode_core.so",
+                "libgatenode.so",
+                "libservice_discovery.so",
+                "libguild_module.so",
+                "libnetwork.so"
+            ]
+        },
+        "log": {
+            "level": "INFO",
+            "output": {
+                "console": true,
+                "file": {
+                    "enabled": true,
+                    "path": "./logs",
+                    "filename": "basenode.log",
+                    "max_size_mb": 100,
+                    "max_files": 10,
+                    "rotate_daily": true
+                }
+            }
+        },
+        "network": {
+            "listen": {
+                "ip": "0.0.0.0",
+                "port": 9528,
+                "backlog": 128
+            },
+            "worker_threads": 1,
+            "timeout": {
+                "connect_timeout_ms": 3000,
+                "read_timeout_ms": 30000,
+                "write_timeout_ms": 30000
+            }
+        },
+        "service_discovery": {
+            "zookeeper": {
+                "hosts": "127.0.0.1:2181",
+                "timeout_ms": 3000,
+                "auth": {
+                    "enabled": false,
+                    "username": "admin",
+                    "password": "password"
+                },
+                "paths": [
+                    "/basenode"
+                ]
+            },
+            "service_hosts": "127.0.0.1:9527"
+        },
+        "routing": {
+            "enable_module_router": true,
+            "route_timeout_ms": 5000
+        }
+    }
+}

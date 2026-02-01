@@ -17,8 +17,8 @@ ErrorCode Player::DoInit()
 
 ErrorCode Player::DoUpdate()
 {
-    OnLogin(10001);
-    BaseNodeLogInfo("PlayerModule Update");
+    // OnLogin(10001);
+    // BaseNodeLogInfo("PlayerModule Update");
     return ErrorCode::BN_SUCCESS;
 }
 

@@ -24,11 +24,24 @@ struct ServiceInstance
 {
     std::string service_name;
     std::string module_name;
-    std::string instance_id;
+    uint64_t instance_id;
     std::string host;
     uint16_t    port{0};
     bool        healthy{true};
+    uint64_t    connection_id{0};
     std::unordered_map<std::string, std::string> metadata;
+
+    ServiceInstance()
+    {
+        service_name = "";
+        module_name = "";
+        instance_id = 0;
+        host = "";
+        port = 0;
+        healthy = true;
+        connection_id = 0;
+        metadata.clear();
+    }
 
 
     // 一个非常简单的序列化，将 ServiceInstance 序列化为 "host:port;key1=val1;key2=val2" 形式
@@ -36,7 +49,8 @@ struct ServiceInstance
     {
         std::string data = host + ":" + std::to_string(port);
         data.append(";module_name:").append(module_name);
-        data.append(";instance_id:").append(instance_id);
+        data.append(";service_name:").append(service_name);
+        data.append(";instance_id:").append(std::to_string(instance_id));
         data.append(";healthy:").append(healthy ? "true" : "false");
         for (const auto &kv : metadata)
         {
@@ -48,22 +62,73 @@ struct ServiceInstance
     static ServiceInstance ParseInstance(const std::string &data)
     {
         ServiceInstance instance;
-        auto colon_pos = data.find(':');
+        
+        // 解析 host:port (第一个分号之前的部分)
+        auto first_semicolon = data.find(';');
+        std::string host_port = (first_semicolon != std::string::npos) 
+                                ? data.substr(0, first_semicolon) 
+                                : data;
+        
+        auto colon_pos = host_port.find(':');
         if (colon_pos != std::string::npos)
         {
-            instance.host = data.substr(0, colon_pos);
-            instance.port = static_cast<uint16_t>(std::stoi(data.substr(colon_pos + 1)));
+            instance.host = host_port.substr(0, colon_pos);
+            instance.port = static_cast<uint16_t>(std::stoi(host_port.substr(colon_pos + 1)));
         }
-        auto semicolon_pos = data.find(';');
-        if (semicolon_pos != std::string::npos)
+        
+        // 解析分号分隔的键值对
+        if (first_semicolon != std::string::npos)
         {
-            instance.module_name = data.substr(semicolon_pos + 1);
+            size_t pos = first_semicolon + 1;
+            while (pos < data.length())
+            {
+                auto next_semicolon = data.find(';', pos);
+                std::string kv_pair = (next_semicolon != std::string::npos)
+                                      ? data.substr(pos, next_semicolon - pos)
+                                      : data.substr(pos);
+                
+                // 尝试用冒号分隔 (module_name, instance_id, healthy)
+                auto kv_colon = kv_pair.find(':');
+                if (kv_colon != std::string::npos)
+                {
+                    std::string key = kv_pair.substr(0, kv_colon);
+                    std::string value = kv_pair.substr(kv_colon + 1);
+                    
+                    if (key == "module_name")
+                    {
+                        instance.module_name = value;
+                    }
+                    else if (key == "service_name")
+                    {
+                        instance.service_name = value;
+                    }
+                    else if (key == "instance_id")
+                    {
+                        instance.instance_id = static_cast<uint64_t>(std::stoul(value));
+                    }
+                    else if (key == "healthy")
+                    {
+                        instance.healthy = (value == "true");
+                    }
+                }
+                else
+                {
+                    // 尝试用等号分隔 (metadata)
+                    auto kv_equal = kv_pair.find('=');
+                    if (kv_equal != std::string::npos)
+                    {
+                        std::string key = kv_pair.substr(0, kv_equal);
+                        std::string value = kv_pair.substr(kv_equal + 1);
+                        instance.metadata[key] = value;
+                    }
+                }
+                
+                if (next_semicolon == std::string::npos)
+                    break;
+                pos = next_semicolon + 1;
+            }
         }
-        auto equal_pos = instance.module_name.find('=');
-        if (equal_pos != std::string::npos)
-        {
-            instance.instance_id = instance.module_name.substr(equal_pos + 1);
-        }
+        
         return instance;
     }
 
@@ -87,7 +152,7 @@ public:
 using InstanceList = std::vector<ServiceInstance>;
 
 using InstanceChangeCallback = std::function<void(const std::string &service_name,
-                                                  const InstanceList &instances)>;
+                                                const InstanceList &instances)>;
 
 class IServiceDiscovery
 {

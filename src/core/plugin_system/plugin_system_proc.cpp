@@ -92,7 +92,7 @@ int PluginLoadManager::Init()
 
 int PluginLoadManager::Update()
 {
-    BaseNodeLogDebug("PluginLoadManager Update------------------------------------------------------------------------------------------------");
+    // BaseNodeLogDebug("PluginLoadManager Update------------------------------------------------------------------------------------------------");
     for (auto& [so_path, handle] : plugin_map_) {
         if (!handle) continue; // 跳过无效 handle
         SafeCallSimple_(handle, so_path, "updateSo");
@@ -118,6 +118,7 @@ int PluginLoadManager::LoadPluginSo_(const std::string& so_path)
     }
     plugin_map_[so_path] = handle;
     SafeCallSimple_(handle, so_path, "initSo");
+    BaseNodeLogInfo("[PluginLoadManager] load module:%s Finished --------------------------------------------------------------", so_path.c_str());
     return 0;
 }
 
@@ -187,6 +188,11 @@ inline std::string PluginLoadManager::GetLastLibraryError_() {
 }
 
 
+// 如何仅通过日志定位崩溃位置：
+// 1) 看日志中的 FUNC[xxx]：可区分是 initSo / updateSo / uninitSo 中哪个接口崩溃。
+// 2) 看日志中的 Backtrace：SafeCall 在捕获信号时会自动打印调用栈，直接看日志即可定位崩溃函数/行。
+//    若 Backtrace 里是地址而非符号，请确保链接时使用 -rdynamic（主程序与 .so 都建议带调试符号或 -rdynamic）。
+// 3) 若需更详细分析，可用 GDB：catch signal SIGSEGV -> run -> bt。
 void PluginLoadManager::SafeCallSimple_(void* handle, const std::string& so_path, const std::string& symbol_name)
 {
     if (!handle) {
@@ -194,9 +200,10 @@ void PluginLoadManager::SafeCallSimple_(void* handle, const std::string& so_path
         return;
     }
 
-    // 自定义错误回调
-    auto error_callback = [](const std::string& context, const std::string& error_msg) {
-        BaseNodeLogError("XXX ---> SafeCall Error - Plugin: [%s], Error: %s", context.c_str(), error_msg.c_str());
+    // 自定义错误回调；context 中带 so_path 和 symbol_name，便于确定是哪个导出函数崩溃
+    std::string context = so_path + " FUNC[" + symbol_name + "]";
+    auto error_callback = [](const std::string& ctx, const std::string& error_msg) {
+        BaseNodeLogError("XXX ---> SafeCall Error - Plugin: [%s], Error: %s", ctx.c_str(), error_msg.c_str());
     };
 
     void* func = GetSymbolAddress_(handle, symbol_name);
@@ -205,12 +212,12 @@ void PluginLoadManager::SafeCallSimple_(void* handle, const std::string& so_path
         
         // 使用 ToolBox 子库中的 SafeCall 工具安全调用插件函数
         // 捕获异常和信号（SIGSEGV/SIGFPE），使程序能够继续运行
-        bool success = ToolBox::SafeCallSimple(update_func, so_path, error_callback);
+        bool success = ToolBox::SafeCallSimple(update_func, context, error_callback);
         
         if (!success) {
             // 注意：由于 siglongjmp 回退栈帧的特性，SafeCall 内部的错误回调
             // 可能不会输出。这里手动调用错误回调，确保能看到错误信息。
-            error_callback(so_path, "caught signal or exception");
+            error_callback(context, "caught signal or exception");
         }
     }
     else {

@@ -244,6 +244,7 @@ ErrorCode ModuleRouter::RouteRpcData_(std::string &&rpc_data, ModuleEvent::Event
     return ErrorCode::BN_SUCCESS;
 }
 
+
 } // namespace BaseNode
 
 // 全局单例实例（在 basenode_core 中定义，使用 static 确保只在此文件中定义一次）

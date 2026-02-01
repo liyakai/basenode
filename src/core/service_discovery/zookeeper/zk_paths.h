@@ -1,6 +1,7 @@
 #pragma once
 
 #include <string>
+#include <cstdint>
 
 namespace BaseNode::ServiceDiscovery::Zookeeper
 {
@@ -48,9 +49,9 @@ struct ZkPaths
     }
 
     std::string ServiceInstancePath(const std::string &service_name,
-                                    const std::string &instance_id) const
+                                    uint64_t instance_id) const
     {
-        return ServiceInstancesPath(service_name) + "/" + instance_id;
+        return ServiceInstancesPath(service_name) + "/" + std::to_string(instance_id);
     }
 };
 

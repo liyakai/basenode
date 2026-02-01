@@ -3,11 +3,17 @@
 #include "apollo_config_loader.h"
 #include "config_value.h"
 #include "utils/basenode_def_internal.h"
+#include <tools/singleton.h>
 #include <filesystem>
 #include <algorithm>
 
 namespace BaseNode::Config
 {
+
+ConfigManager* GetConfigManagerInstance()
+{
+    return ToolBox::Singleton<ConfigManager>::Instance();
+}
 
 ConfigManager::ConfigManager()
 {

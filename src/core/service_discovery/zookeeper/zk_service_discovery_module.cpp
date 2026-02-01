@@ -4,19 +4,19 @@
 #include "tools/md5.h"
 #include "utils/basenode_def_internal.h"
 #include "protobuf/pb_out/errcode.pb.h"
+#include "config/config_manager.h"
 #include <unistd.h>  // for getpid()
+
 
 namespace BaseNode::ServiceDiscovery::Zookeeper
 {
 
 void ZkServiceDiscoveryModule::Configure(IZkClientPtr zk_client,
-                                         const ZkPaths &paths,
-                                         const std::string &service_hosts)
+                                         const ZkPaths &paths)
 {
     zk_client_  = std::move(zk_client);
     paths_      = paths;
-    service_hosts_ = service_hosts;
-    BaseNodeLogInfo("[ZkServiceDiscovery] Configure success. paths:%s, service_hosts:%s", paths.root.c_str(), service_hosts.c_str());
+    BaseNodeLogInfo("[ZkServiceDiscovery] Configure success. paths:%s", paths.root.c_str());
 }
 
 ErrorCode ZkServiceDiscoveryModule::DoInit()
@@ -29,7 +29,7 @@ ErrorCode ZkServiceDiscoveryModule::DoInit()
         return ErrorCode::BN_INVALID_ARGUMENTS;
     }
 
-    registry_ = std::make_shared<ZkServiceRegistry>(zk_client_, paths_, service_hosts_);
+    registry_ = std::make_shared<ZkServiceRegistry>(zk_client_, paths_);
     if (!registry_->Init())
     {
         BaseNodeLogError("[ZkServiceDiscovery] ZkServiceRegistry Init failed");
@@ -163,7 +163,34 @@ bool ZkServiceDiscoveryModule::RegisterModuleInServiceDiscovery(BaseNode::IModul
     //     // 已存在也可以视为成功
     // }
 
+    std::string listen_ip = "0.0.0.0";
+    uint16_t listen_port = 9527;
+    std::vector<std::string> loaded_configs = ConfigMgr->GetLoadedConfigNames();
+    if (!loaded_configs.empty()) {
+        std::string config_name = loaded_configs[0];
+        // 从配置读取监听参数
+        std::string listen_ip_path = config_name + ".network.listen.ip";
+        std::string listen_port_path = config_name + ".network.listen.port";
+        listen_ip = ConfigMgr->Get<std::string>(config_name, listen_ip_path, "0.0.0.0");
+        listen_port = static_cast<uint16_t>(ConfigMgr->Get<int>(config_name, listen_port_path, 9527));
+        BaseNodeLogInfo("[Network] Loaded listen config from '%s': %s:%d", config_name.c_str(), listen_ip.c_str(), listen_port);
+    } else {
+        BaseNodeLogWarn("[ZkServiceDiscovery] No config name in ConfigManager (GetLoadedConfigNames empty), using default listen: %s:%d", listen_ip.c_str(), listen_port);
+    }
+
     // 注册该模块下所有 RPC 函数 HandlerKey
+    BaseNode::ServiceDiscovery::ServiceInstance service_instance;
+    service_instance.host = listen_ip;
+    service_instance.port = listen_port;
+    service_instance.healthy = true;   
+    service_instance.module_name = module->GetModuleClassName();
+    if (!registry_->RegistService(service_instance))
+    {
+        BaseNodeLogError("[ZkServiceDiscoveryModule] RegisterModuleInServiceDiscovery: failed to register service instance. service_instance:%s."
+                        , service_instance.SerializeInstance().c_str());
+        return false;
+    }
+
     auto handler_keys = module->GetAllServiceHandlerKeys();
     // if (!handler_keys.empty())
     // {
@@ -171,13 +198,8 @@ bool ZkServiceDiscoveryModule::RegisterModuleInServiceDiscovery(BaseNode::IModul
     // }
     for (auto key : handler_keys)
     {
-        BaseNode::ServiceDiscovery::ServiceInstance service_instance;
         service_instance.service_name = std::to_string(key);
-        service_instance.instance_id = std::to_string(MD5Hash32Constexpr(std::to_string(key)));
-        service_instance.module_name = module->GetModuleClassName();
-        service_instance.host = "127.0.0.1";  // TODO: 从配置读取/Network 模块获取
-        service_instance.port = 9000;         // TODO: 从配置读取/Network 模块获取
-        service_instance.healthy = true;    
+        service_instance.instance_id = static_cast<uint64_t>(key);
         if (!registry_->RegistService(service_instance))
         {
             BaseNodeLogError("[ZkServiceDiscoveryModule] RegisterModuleInServiceDiscovery: failed to register service instance. service_instance:%s."
@@ -289,21 +311,24 @@ bool ZkServiceDiscoveryModule::DeregisterModuleInServiceDiscovery(BaseNode::IMod
     
     // 获取模块的所有 RPC handler keys
     auto handler_keys = module->GetAllServiceHandlerKeys();
-    
-    // 如果模块没有服务，说明注册时没有创建任何节点，直接返回成功
-    if (handler_keys.empty())
-    {
-        BaseNodeLogInfo("[ZkServiceDiscoveryModule] DeregisterModuleInServiceDiscovery: module (id: %u, class: %s) has no services, "
-                       "no ZK nodes were created during registration, skip deregistration",
-                       module->GetModuleId(), module_id_str.c_str());
-        return true;
+
+    std::string listen_ip = "0.0.0.0";
+    uint16_t listen_port = 9527;
+    std::vector<std::string> loaded_configs = ConfigMgr->GetLoadedConfigNames();
+    if (!loaded_configs.empty()) {
+        std::string config_name = loaded_configs[0];
+        // 从配置读取监听参数
+        std::string listen_ip_path = config_name + ".network.listen.ip";
+        std::string listen_port_path = config_name + ".network.listen.port";
+        listen_ip = ConfigMgr->Get<std::string>(config_name, listen_ip_path, "0.0.0.0");
+        listen_port = static_cast<uint16_t>(ConfigMgr->Get<int>(config_name, listen_port_path, 9527));
+        BaseNodeLogInfo("[Network] Loaded listen config from '%s': %s:%d", config_name.c_str(), listen_ip.c_str(), listen_port);
+    } else {
+        BaseNodeLogWarn("[ZkServiceDiscovery] No config name in ConfigManager (GetLoadedConfigNames empty), using default listen: %s:%d", listen_ip.c_str(), listen_port);
     }
     
-    // 使用与注册时相同的路径结构：/basenode/{host}:{port}/{module_name}
-    // 注意：注册时使用的是硬编码的 "127.0.0.1:9000"，所以注销时也必须使用相同的值
-    // TODO: 应该从配置或 Network 模块获取实际的 host:port，确保注册和注销使用相同的值
-    const std::string host = "127.0.0.1";
-    const uint32_t port = 9000;
+    const std::string host = listen_ip;
+    const uint32_t port = listen_port;
     const std::string host_port_str = host + ":" + std::to_string(port);
     const auto host_port = paths_.BaseNodeRoot() + "/" + host_port_str;
     const auto module_path = host_port + "/" + module_id_str;
@@ -311,21 +336,25 @@ bool ZkServiceDiscoveryModule::DeregisterModuleInServiceDiscovery(BaseNode::IMod
     // 先注销该模块注册的所有服务实例（这些是 ephemeral 节点，会自动删除）
     // 然后再删除模块目录（持久节点，需要手动删除）
     bool all_deregistered = true;
-    
+    BaseNode::ServiceDiscovery::ServiceInstance service_instance;
+    service_instance.module_name = module->GetModuleClassName();
+    // 使用与注册时相同的 host 和 port
+    service_instance.host = host;
+    service_instance.port = port;
+    if (!registry_->DeRegisterService(service_instance))
+    {
+        BaseNodeLogWarn("[ZkServiceDiscoveryModule] DeregisterModuleInServiceDiscovery: failed to deregister service instance. service_instance:%s.",
+            service_instance.SerializeInstance().c_str());
+        all_deregistered = false;
+    }
     for (auto key : handler_keys)
     {
-        BaseNode::ServiceDiscovery::ServiceInstance service_instance;
         service_instance.service_name = std::to_string(key);
-        service_instance.instance_id = std::to_string(MD5Hash32Constexpr(std::to_string(key)));
-        service_instance.module_name = module->GetModuleClassName();
-        // 使用与注册时相同的 host 和 port
-        service_instance.host = host;
-        service_instance.port = port;
-        
+        service_instance.instance_id = static_cast<uint64_t>(key);
         if (!registry_->DeRegisterService(service_instance))
         {
-            BaseNodeLogWarn("[ZkServiceDiscoveryModule] DeregisterModuleInServiceDiscovery: failed to deregister service instance. service_instance:%s.",
-                service_instance.SerializeInstance().c_str());
+            BaseNodeLogWarn("[ZkServiceDiscoveryModule] DeregisterModuleInServiceDiscovery: failed to deregister service instance. service_instance:%s."
+                            , service_instance.SerializeInstance().c_str());
             all_deregistered = false;
         }
     }
@@ -387,10 +416,18 @@ void ZkServiceDiscoveryModule::WatchServiceInstances(const std::string &service_
 extern "C" SO_EXPORT_SYMBOL void SO_EXPORT_FUNC_INIT()
 {
     // 在 Init() 之前先调用 Configure()
-    // TODO: 这些配置应该从配置文件或环境变量中读取
-    std::string zk_hosts = "127.0.0.1:2181";  // 示例：实际应从配置读取
+    std::string zk_hosts = "127.0.0.1:2181";
+    std::vector<std::string> loaded_configs = ConfigMgr->GetLoadedConfigNames();
+    if (!loaded_configs.empty()) {
+        std::string config_name = loaded_configs[0];
+        // 从配置读取监听参数
+        std::string zk_hosts_path = config_name + ".service_discovery.zookeeper.hosts";
+        zk_hosts = ConfigMgr->Get<std::string>(config_name, zk_hosts_path, "127.0.0.1:2181");
+        BaseNodeLogInfo("[Zookeeper] Loaded hosts config from '%s': %s", config_name.c_str(), zk_hosts.c_str());
+    } else {
+        BaseNodeLogWarn("[ZkServiceDiscovery] No config name in ConfigManager (GetLoadedConfigNames empty), using default hosts: %s", zk_hosts.c_str());
+    }
     std::string process_id = "basenode-process-" + std::to_string(getpid());  // 示例：实际应从配置读取
-    std::string service_hosts = "127.0.0.1:9527";
     ZkPaths paths{"/basenode"};  // 示例：实际应从配置读取
     
     // 创建真实的 Zookeeper 客户端并连接
@@ -411,7 +448,7 @@ extern "C" SO_EXPORT_SYMBOL void SO_EXPORT_FUNC_INIT()
         return;
     }
     
-    ZkServiceDiscoveryMgr->Configure(zk_client, paths, service_hosts);
+    ZkServiceDiscoveryMgr->Configure(zk_client, paths);
     ZkServiceDiscoveryMgr->Init();
 }
 
@@ -470,10 +507,6 @@ extern "C" SO_EXPORT_SYMBOL BaseNode::IModuleZkDiscovery* GetModuleZkDiscoveryIn
         {
             BaseNodeLogWarn("[ZkServiceDiscovery] GetModuleZkDiscoveryInstance: ZkServiceDiscoveryMgr is null");
         }
-    }
-    else
-    {
-        BaseNodeLogWarn("[ZkServiceDiscovery] GetModuleZkDiscoveryInstance: ModuleZkDiscoveryImpl instance already exists");
     }
     return g_module_zk_discovery_instance;
 }

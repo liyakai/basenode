@@ -50,6 +50,12 @@ public:
      */
     ErrorCode CallAllModulesAfterInit();
 
+    /**
+     * @brief 获取 Network 模块
+     * @return Network 模块指针，如果未找到返回 nullptr
+     */
+    IModule* GetNetworkModule() const { return network_module_; }
+
 private:
 
     /**

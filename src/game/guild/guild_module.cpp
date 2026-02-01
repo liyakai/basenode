@@ -33,7 +33,7 @@ ErrorCode Guild::DoInit()
 
 ErrorCode Guild::DoUpdate()
 {
-    BaseNodeLogInfo("GuildModule Update");
+    // BaseNodeLogInfo("GuildModule Update");
     return ErrorCode::BN_SUCCESS;
 }
 

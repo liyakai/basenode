@@ -43,6 +43,11 @@ public:
     /// 监听子节点变化，具体底层可通过 watch/回调线程等实现
     using ChildrenChangedCallback = std::function<void(const std::string &path)>;
     virtual bool WatchChildren(const std::string &path, ChildrenChangedCallback cb) = 0;
+
+    /// 监听会话状态变化（连接、断开、过期等）
+    /// state: true 表示连接，false 表示断开/过期
+    using SessionStateCallback = std::function<void(bool connected)>;
+    virtual bool WatchSessionState(SessionStateCallback cb) = 0;
 };
 
 using IZkClientPtr = std::shared_ptr<IZkClient>;

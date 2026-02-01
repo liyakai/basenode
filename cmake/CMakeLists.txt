@@ -26,11 +26,15 @@ ADD_CORE_LIBRARY(basenode_core
 ADD_SHARED_LIBRARY_FROM_DIR(config ${SRC_PATH}/core/config NO_BASE_LIBS EXPORT_SYMBOLS YAML_CPP)
 ADD_SHARED_LIBRARY_FROM_DIR(gatenode ${SRC_PATH}/framework/gatenode)
 # service_discovery 是基础库，使用 NO_BASE_LIBS 避免自己链接自己，使用 EXPORT_SYMBOLS 导出符号供其他模块使用，使用 ZOOKEEPER 链接 zookeeper 库
+# 显式链接 config，使 GetConfigManagerInstance() 来自 libconfig.so，与主程序共用同一 ConfigManager 单例
 ADD_SHARED_LIBRARY_FROM_DIR(service_discovery ${SRC_PATH}/core/service_discovery/zookeeper NO_BASE_LIBS EXPORT_SYMBOLS ZOOKEEPER)
+target_link_libraries(service_discovery PUBLIC config)
 # 业务模块自动链接基础库（如 service_discovery），无需手动指定
 ADD_SHARED_LIBRARY_FROM_DIR(player_module ${SRC_PATH}/game/player PROTOBUF)
 ADD_SHARED_LIBRARY_FROM_DIR(guild_module ${SRC_PATH}/game/guild PROTOBUF)
-ADD_SHARED_LIBRARY_FROM_DIR(network ${SRC_PATH}/core/net)
+ADD_SHARED_LIBRARY_FROM_DIR(network ${SRC_PATH}/core/net EXPORT_SYMBOLS)
+# router_module 是路由模块，使用 ZOOKEEPER 链接 zookeeper 库，使用 DEPENDS 链接 network 库
+ADD_SHARED_LIBRARY_FROM_DIR(router_module ${SRC_PATH}/framework/router ZOOKEEPER DEPENDS network)
 
 # Network 模块需要特殊链接选项
 target_link_options(network PRIVATE

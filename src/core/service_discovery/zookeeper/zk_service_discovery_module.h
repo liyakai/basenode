@@ -31,8 +31,7 @@ public:
 
     /// 在 Init() 前注入 ZK 客户端与路径配置
     void Configure(IZkClientPtr zk_client,
-                   const ZkPaths &paths,
-                   const std::string &process_id);
+                   const ZkPaths &paths);
 
     /// 注册当前进程内的服务实例（通常在对应业务模块 Init 时调用）
     bool RegisterInstance(const ServiceInstance &instance);
@@ -55,10 +54,12 @@ protected:
 private:
     IZkClientPtr         zk_client_;
     ZkPaths              paths_{"/basenode"};
-    std::string          service_hosts_;
 
     ZkServiceRegistryPtr   registry_;
     ZkServiceDiscoveryPtr  discovery_;
+
+    // 允许 ModuleZkDiscoveryImpl 访问私有成员
+    friend class ModuleZkDiscoveryImpl;
 };
 
 /// 全局单例访问宏（与 NetworkMgr 风格保持一致）
@@ -113,11 +114,11 @@ private:
  
      BaseNode::ServiceDiscovery::InstanceList GetServiceInstances(const std::string &service_name) override
      {
-         if (!zk_module_)
+         if (!zk_module_ || !zk_module_->discovery_)
          {
-             return InstanceList();
+             return BaseNode::ServiceDiscovery::InstanceList();
          }
-         return BaseNode::ServiceDiscovery::InstanceList();
+         return zk_module_->discovery_->GetServiceInstances(service_name);
      }
  
      void WatchServiceInstances(const std::string &service_name,
@@ -128,6 +129,43 @@ private:
              return;
          }
          return zk_module_->WatchServiceInstances(service_name, cb);
+     }
+
+     std::vector<std::string> GetAllServiceNames() override
+     {
+         if (!zk_module_ || !zk_module_->zk_client_)
+         {
+             return std::vector<std::string>();
+         }
+         return zk_module_->zk_client_->GetChildren(zk_module_->paths_.BaseNodeRoot());
+     }
+
+     void WatchServicesDirectory(ServiceDiscovery::InstanceChangeCallback cb) override
+     {
+         if (!zk_module_ || !zk_module_->zk_client_)
+         {
+             return;
+         }
+         // 确保服务目录路径存在
+         const std::string services_root = zk_module_->paths_.ServicesRoot();
+         if (!zk_module_->zk_client_->EnsurePath(services_root))
+         {
+             BaseNodeLogError("[ModuleZkDiscoveryImpl] WatchServicesDirectory: Failed to ensure path %s", services_root.c_str());
+             return;
+         }
+         // 监听服务目录变化
+         zk_module_->zk_client_->WatchChildren(services_root,
+             [this, cb](const std::string& path) {
+                 // 获取所有服务名
+                 auto service_names = GetAllServiceNames();
+                 // 对每个服务获取实例并回调
+                 for (const auto& service_name : service_names) {
+                     auto instances = GetServiceInstances(service_name);
+                     if (cb) {
+                         cb(service_name, instances);
+                     }
+                 }
+             });
      }
  
  private:

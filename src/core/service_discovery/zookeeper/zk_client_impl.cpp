@@ -112,30 +112,46 @@ void ZkClientImpl::GlobalWatcher(zhandle_t *zh, int type, int state, const char 
 
     if (type == ZOO_SESSION_EVENT)
     {
+        bool is_connected = false;
         if (state == ZOO_CONNECTED_STATE)
         {
             client->connected_ = true;
+            is_connected = true;
             BaseNodeLogInfo("[ZkClientImpl] Zookeeper session connected");
         }
         else if (state == ZOO_EXPIRED_SESSION_STATE)
         {
             client->connected_ = false;
+            is_connected = false;
             BaseNodeLogError("[ZkClientImpl] Zookeeper session expired");
         }
         else if (state == ZOO_AUTH_FAILED_STATE)
         {
             client->connected_ = false;
+            is_connected = false;
             BaseNodeLogError("[ZkClientImpl] Zookeeper authentication failed");
         }
         else if (state == ZOO_CONNECTING_STATE)
         {
             client->connected_ = false;
+            is_connected = false;
             BaseNodeLogInfo("[ZkClientImpl] Zookeeper connecting...");
         }
         else if (state == ZOO_ASSOCIATING_STATE)
         {
             client->connected_ = false;
+            is_connected = false;
             BaseNodeLogInfo("[ZkClientImpl] Zookeeper associating...");
+        }
+
+        // 调用会话状态回调
+        std::lock_guard<std::mutex> lock(client->mutex_);
+        if (client->session_state_callback_)
+        {
+            // 在单独线程中执行回调，避免阻塞 Zookeeper 事件处理
+            std::thread([callback = client->session_state_callback_, is_connected]() {
+                callback(is_connected);
+            }).detach();
         }
     }
 }
@@ -423,6 +439,28 @@ bool ZkClientImpl::WatchChildren(const std::string &path, ChildrenChangedCallbac
     return true;
 }
 
+bool ZkClientImpl::WatchSessionState(SessionStateCallback cb)
+{
+    if (!cb)
+    {
+        BaseNodeLogError("[ZkClientImpl] Invalid callback for WatchSessionState");
+        return false;
+    }
+
+    std::lock_guard<std::mutex> lock(mutex_);
+    session_state_callback_ = cb;
+    
+    // 如果当前已连接，立即通知一次
+    if (connected_)
+    {
+        std::thread([callback = cb]() {
+            callback(true);
+        }).detach();
+    }
+    
+    return true;
+}
+
 void ZkClientImpl::Disconnect()
 {
     std::lock_guard<std::mutex> lock(mutex_);
@@ -435,6 +473,7 @@ void ZkClientImpl::Disconnect()
 
     connected_ = false;
     watch_callbacks_.clear();
+    session_state_callback_ = nullptr;
 
     BaseNodeLogInfo("[ZkClientImpl] Disconnected from Zookeeper");
 }

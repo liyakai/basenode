@@ -51,6 +51,17 @@ public:
      virtual void WatchServiceInstances(const std::string &service_name,
                 ServiceDiscovery::InstanceChangeCallback cb) = 0;
 
+    /**
+     * @brief 获取所有服务名（遍历服务目录）
+     * @return 服务名列表
+     */
+    virtual std::vector<std::string> GetAllServiceNames() = 0;
+
+    /**
+     * @brief 监听服务目录变化（发现新服务）
+     * @param cb 回调函数
+     */
+    virtual void WatchServicesDirectory(ServiceDiscovery::InstanceChangeCallback cb) = 0;
 };
 
 } // namespace BaseNode

@@ -205,8 +205,11 @@ private:
     std::unordered_map<std::string, std::string> config_sources_; // name -> source
 };
 
-/// 全局单例访问宏
-#define ConfigMgr ::ToolBox::Singleton<BaseNode::Config::ConfigManager>::Instance()
+/// 获取 ConfigManager 单例（实现在 config_manager.cpp，保证进程内唯一）
+ConfigManager* GetConfigManagerInstance();
+
+/// 全局单例访问宏（通过函数获取，确保主程序与各 .so 使用同一实例）
+#define ConfigMgr (::BaseNode::Config::GetConfigManagerInstance())
 
 } // namespace BaseNode::Config
 

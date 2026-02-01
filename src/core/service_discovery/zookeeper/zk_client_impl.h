@@ -76,11 +76,15 @@ private:
     /// 处理子节点变化的 watch 回调
     void HandleChildrenChanged(const std::string &path);
 
+    /// 监听会话状态变化
+    bool WatchSessionState(SessionStateCallback cb) override;
+
 private:
     zhandle_t *zh_;                                    // Zookeeper 句柄
     std::atomic<bool> connected_;                      // 连接状态
     std::mutex mutex_;                                 // 保护共享数据
     std::unordered_map<std::string, ChildrenChangedCallback> watch_callbacks_; // path -> callback 映射
+    SessionStateCallback session_state_callback_;      // 会话状态回调
 };
 
 } // namespace BaseNode::ServiceDiscovery::Zookeeper
