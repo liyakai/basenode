@@ -5,6 +5,8 @@
 #include "utils/basenode_def_internal.h"
 #include "protobuf/pb_out/errcode.pb.h"
 #include "config/config_manager.h"
+#include <chrono>
+#include <thread>
 #include <unistd.h>  // for getpid()
 
 
@@ -402,6 +404,7 @@ bool ZkServiceDiscoveryModule::DeregisterModuleInServiceDiscovery(BaseNode::IMod
 }
 
 void ZkServiceDiscoveryModule::WatchServiceInstances(const std::string &service_name,
+                const ServiceDiscovery::InstanceList &instance_list,
                 ServiceDiscovery::InstanceChangeCallback cb)
 {
     if (!discovery_)
@@ -409,7 +412,7 @@ void ZkServiceDiscoveryModule::WatchServiceInstances(const std::string &service_
         BaseNodeLogError("[ZkServiceDiscoveryModule] WatchServiceInstances: discovery_ is null");
         return;
     }
-    discovery_->WatchServiceInstances(service_name, std::move(cb));
+    discovery_->WatchServiceInstances(service_name, instance_list, std::move(cb));
 }
 
 // 插件导出符号，方便通过 PluginLoadManager 装载
@@ -447,7 +450,15 @@ extern "C" SO_EXPORT_SYMBOL void SO_EXPORT_FUNC_INIT()
         BaseNodeLogError("[ZkServiceDiscovery] initSo: AddAuth failed");
         return;
     }
-    
+    // AddAuth 是异步的：服务端可能稍后返回 ZOO_AUTH_FAILED_STATE 并断开连接。
+    // 等待一小段时间并确认仍连接，避免后续 GetServiceInstances 时出现 "Not connected"。
+    std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    if (!zk_client->IsConnected())
+    {
+        BaseNodeLogError("[ZkServiceDiscovery] initSo: ZK disconnected after AddAuth (check digest auth or credentials)");
+        return;
+    }
+
     ZkServiceDiscoveryMgr->Configure(zk_client, paths);
     ZkServiceDiscoveryMgr->Init();
 }

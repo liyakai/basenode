@@ -161,6 +161,7 @@ public:
 
     virtual InstanceList GetServiceInstances(const std::string &service_name) = 0;
     virtual void WatchServiceInstances(const std::string &service_name,
+                       const ServiceDiscovery::InstanceList &instance_list,
                        InstanceChangeCallback cb) = 0;
 };
 

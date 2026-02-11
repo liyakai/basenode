@@ -415,7 +415,7 @@ void RouterModule::DiscoverAndConnectAllServices()
     // 获取所有的实例
     ServiceDiscovery::InstanceList instance_list = ModuleZkDiscoveryMgr->GetServiceInstances("/basenode/services");
 
-    BaseNodeLogInfo("[RouterModule] DiscoverAndConnectAllServices: found %zu instances", instance_list.size());
+    BaseNodeLogInfo("[RouterModule] DiscoverAndConnectAllServices: found %zu instances---------------------------", instance_list.size());
 
     // 只对 /basenode/services 注册一次监听，避免同一路径被注册多个 watcher 导致重复回调和重复日志
     const std::string services_path("/basenode/services");
@@ -426,6 +426,7 @@ void RouterModule::DiscoverAndConnectAllServices()
         } else {
             watched_services_.insert(services_path);
             ModuleZkDiscoveryMgr->WatchServiceInstances(services_path,
+                instance_list,
                 [this](const std::string& svc_name, const ServiceDiscovery::InstanceList& instances) {
                     OnServiceInstancesChanged(svc_name, instances);
                 });
@@ -433,11 +434,13 @@ void RouterModule::DiscoverAndConnectAllServices()
     }
 
     // 用当前实例列表做一次同步处理（连接等）
-    OnServiceInstancesChanged(services_path, instance_list);
+    // OnServiceInstancesChanged(services_path, instance_list);
+
+    BaseNodeLogInfo("[RouterModule] DiscoverAndConnectAllServices, begin to watch services directory. --------------------------------");
 
     // 监听服务目录变化，动态发现新服务
     ModuleZkDiscoveryMgr->WatchServicesDirectory(
-        [this](const std::string& service_name, const ServiceDiscovery::InstanceList& instances) {
+        [this, &instance_list](const std::string& service_name, const ServiceDiscovery::InstanceList& instances) {
             // 检查是否是新服务
             bool is_new_service = false;
             {
@@ -451,6 +454,7 @@ void RouterModule::DiscoverAndConnectAllServices()
             if (is_new_service) {
                 // 监听新服务的实例变化
                 ModuleZkDiscoveryMgr->WatchServiceInstances(service_name,
+                    instance_list,
                     [this](const std::string& svc_name, const ServiceDiscovery::InstanceList& insts) {
                         OnServiceInstancesChanged(svc_name, insts);
                     });
@@ -459,6 +463,8 @@ void RouterModule::DiscoverAndConnectAllServices()
             // 处理服务实例变化
             // OnServiceInstancesChanged(service_name, instance_list);
         });
+
+    BaseNodeLogInfo("[RouterModule] DiscoverAndConnectAllServices, end to watch services directory. --------------------------------");
 }
 
 void RouterModule::OnServicesDirectoryChanged(const std::string& path)

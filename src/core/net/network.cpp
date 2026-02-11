@@ -50,14 +50,22 @@ ErrorCode Network::DoInit()
     }
 
     // 设置监听成功回调
-    network_impl_->SetOnBinded([this](ToolBox::NetworkType type, uint64_t opaque, uint64_t conn_id, const std::string& ip, uint16_t port) {
-        BaseNodeLogInfo("[Network] Listen binded successfully, type=%d, opaque=%lu, conn_id=%lu, ip=%s, port=%d", 
-                        type, opaque, conn_id, ip.c_str(), port);
-    });
+    if(listen_ip.empty() || listen_port == 0) {
+        BaseNodeLogWarn("[Network] Listen ip or port is empty, using default listen: %s:%d", listen_ip.c_str(), listen_port);
+    } else {
+        network_impl_->SetOnBinded([this](ToolBox::NetworkType type, uint64_t opaque, uint64_t conn_id, const std::string& ip, uint16_t port) {
+            BaseNodeLogInfo("[Network] Listen binded successfully, type=%d, opaque=%lu, conn_id=%lu, ip=%s, port=%d", 
+                            type, opaque, conn_id, ip.c_str(), port);
+        });
+    }
 
     // 监听端口（在启动网络库之前设置）
-    network_impl_->Accept(ToolBox::NT_TCP, 0, listen_ip, listen_port);
-    BaseNodeLogInfo("[Network] Accept called: %s:%d", listen_ip.c_str(), listen_port);
+    if(listen_ip.empty() || listen_port == 0) {
+        BaseNodeLogWarn("[Network] Listen ip or port is empty, using default listen: %s:%d", listen_ip.c_str(), listen_port);
+    } else {
+        network_impl_->Accept(ToolBox::NT_TCP, 0, listen_ip, listen_port);
+        BaseNodeLogInfo("[Network] Accept called: %s:%d", listen_ip.c_str(), listen_port);
+    }
     
     // 启动网络库
     if (!network_impl_->Start(worker_threads))

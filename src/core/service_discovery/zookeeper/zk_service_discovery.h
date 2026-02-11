@@ -27,7 +27,7 @@ public:
 
     InstanceList GetServiceInstances(const std::string &service_name) override;
 
-    void WatchServiceInstances(const std::string &service_name,
+    void WatchServiceInstances(const std::string &service_name, const InstanceList &instance_list,
                InstanceChangeCallback cb) override;
 
 private:

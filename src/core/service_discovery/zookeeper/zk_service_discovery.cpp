@@ -34,13 +34,14 @@ InstanceList ZkServiceDiscovery::GetServiceInstances(const std::string &service_
             auto host_port_path = services_root + '/' + host_port;
             // 获取该 host:port 下的所有服务名
             auto service_list = zk_client_->GetChildren(host_port_path);
-            BaseNodeLogInfo("[ZkServiceDiscovery] GetServiceInstances: service_list size:%zu", service_list.size());
+            BaseNodeLogInfo("[ZkServiceDiscovery] GetServiceInstances, host_port_path:%s, children service_list size:%zu", host_port_path.c_str(), service_list.size());
             for (const auto &svc : service_list)
             {   
                 auto service_path = host_port_path + '/' + svc;
                 // 获取该服务下的所有实例 ID
                 auto instance_id_list = zk_client_->GetChildren(service_path);
-                BaseNodeLogInfo("[ZkServiceDiscovery] GetServiceInstances: instance_id_list size:%zu", instance_id_list.size());
+                BaseNodeLogInfo("[ZkServiceDiscovery] GetServiceInstances, service_path:%s, children instance_id_list size:%zu", service_path.c_str(), instance_id_list.size());
+                bool has_instance = false;
                 for (const auto &instance_id : instance_id_list)
                 {
                     auto instance_path = service_path + '/' + instance_id;
@@ -51,10 +52,11 @@ InstanceList ZkServiceDiscovery::GetServiceInstances(const std::string &service_
                                         instance_path.c_str());
                         continue;
                     }
-                    BaseNodeLogInfo("[ZkServiceDiscovery] GetServiceInstances: instance_data:%s", instance_data.c_str());
+                    BaseNodeLogInfo("[ZkServiceDiscovery] GetServiceInstances, instance_path:%s, instance_data:%s", instance_path.c_str(), instance_data.c_str());
                     result.push_back(ParseServiceInstance(instance_data));
+                    has_instance = true;
                 }
-                if(result.empty())
+                if(!has_instance)
                 {
                     ServiceInstance instance;
                     instance.service_name = "";
@@ -66,7 +68,7 @@ InstanceList ZkServiceDiscovery::GetServiceInstances(const std::string &service_
                     instance.connection_id = 0;
                     instance.metadata.clear();
                     result.push_back(instance);
-                    BaseNodeLogInfo("[ZkServiceDiscovery] GetServiceInstances: added instance %s.", instance.SerializeInstance().c_str());
+                    BaseNodeLogInfo("[ZkServiceDiscovery] GetServiceInstances, added instance %s, service_path:%s.", instance.SerializeInstance().c_str(), service_path.c_str());
                 }
             }
         }
@@ -82,15 +84,14 @@ InstanceList ZkServiceDiscovery::GetServiceInstances(const std::string &service_
     return result;
 }
 
-void ZkServiceDiscovery::WatchServiceInstances(const std::string &service_name,
-                               InstanceChangeCallback cb)
+void ZkServiceDiscovery::WatchServiceInstances(const std::string &service_name, 
+                                const ServiceDiscovery::InstanceList &instance_list,
+                                InstanceChangeCallback cb)
 {
     if (!zk_client_ || !cb)
     {
         return;
     }
-
-    ServiceDiscovery::InstanceList instance_list = GetServiceInstances(service_name);
 
     // 先立刻回调一次当前视图
     cb(service_name, instance_list);

@@ -8,7 +8,7 @@
 #include "service_discovery/zookeeper/zk_service_registry.h"
 #include "service_discovery/zookeeper/zk_service_discovery.h"
 #include "tools/singleton.h"
-
+#include "tools/string_util.h"
 namespace BaseNode::ServiceDiscovery::Zookeeper
 {
 
@@ -43,6 +43,7 @@ public:
 
     /// 监听服务实例变化
     void WatchServiceInstances(const std::string &service_name,
+                const ServiceDiscovery::InstanceList &instance_list,
                 ServiceDiscovery::InstanceChangeCallback cb);
 
 protected:
@@ -122,13 +123,14 @@ private:
      }
  
      void WatchServiceInstances(const std::string &service_name,
+                const ServiceDiscovery::InstanceList &instance_list,
                 ServiceDiscovery::InstanceChangeCallback cb) override
      {
          if (!zk_module_)
          {
              return;
          }
-         return zk_module_->WatchServiceInstances(service_name, cb);
+         return zk_module_->WatchServiceInstances(service_name, instance_list, cb);
      }
 
      std::vector<std::string> GetAllServiceNames() override
@@ -158,6 +160,7 @@ private:
              [this, cb](const std::string& path) {
                  // 获取所有服务名
                  auto service_names = GetAllServiceNames();
+                 BaseNodeLogInfo("[ModuleZkDiscoveryImpl] WatchServicesDirectory: found %zu services, path:%s, service_names:%s", service_names.size(), path.c_str(), ToolBox::VectorToStr(service_names).c_str());
                  // 对每个服务获取实例并回调
                  for (const auto& service_name : service_names) {
                      auto instances = GetServiceInstances(service_name);
